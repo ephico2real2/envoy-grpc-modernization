@@ -80,7 +80,7 @@ each one is self-contained and verified end to end on a live cluster.
 | Lab | What it adds | Doc |
 |---|---|---|
 | base | REST → gRPC transcoding, a kiosk, MongoDB, 3 replicas | this file |
-| 01 | Prometheus metrics on both tiers, ServiceMonitors, a load runner, measured performance | [labs/01-metrics](labs/01-metrics/README.md) |
+| 01 | Prometheus metrics on both tiers, ServiceMonitors, alerting rules, a load runner, measured performance | [labs/01-metrics](labs/01-metrics/README.md) |
 | 02 | Red Hat Custom Metrics Autoscaler, an HPA driven by request rate | [labs/02-autoscaling](labs/02-autoscaling/README.md) |
 
 One item followed from a browser form all the way to its MongoDB document is in
@@ -313,7 +313,8 @@ the service reads the item back to say whether the sku was missing or the stock 
 | `manifests/20-envoy-config.yaml` | Envoy's whole configuration |
 | `manifests/30-envoy.yaml` | layer 2, Envoy as its own Deployment |
 | `manifests/40-kiosk.yaml` | layer 3, the kiosk, and the Route |
-| `manifests/50-metrics.yaml` | Envoy stats Service and ServiceMonitor |
+| `manifests/50-metrics.yaml` | Envoy stats Service and both ServiceMonitors |
+| `manifests/60-alerts.yaml` | recording rules and alerts (evaluated by Thanos Ruler) |
 | `loadgen/load.py` | the load runner used in both labs |
 | `labs/01-metrics/` | metrics lab: ServiceMonitors, measurements |
 | `labs/02-autoscaling/` | autoscaling lab: operator, ScaledObject, RBAC |

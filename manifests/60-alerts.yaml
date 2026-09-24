@@ -1,0 +1,75 @@
+# Alerting rules for the demo.
+#
+# IMPORTANT: on OpenShift, PrometheusRules in a user namespace are evaluated by
+# THANOS RULER, not by prometheus-user-workload. Looking for them in the
+# prometheus-user-workload pod's /api/v1/rules shows nothing and it is easy to
+# conclude they never loaded. Check thanos-ruler-user-workload instead, or the
+# console under Observe -> Alerting.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: inventory
+  namespace: modernize-demo
+  labels: { app.kubernetes.io/part-of: modernize-demo }
+spec:
+  groups:
+  - name: inventory.rules
+    rules:
+
+    # --- recording rules: the numbers the alerts and dashboards reuse --------
+    # Recorded once so a dashboard and three alerts do not each re-derive it.
+    - record: inventory:rpc:rate1m
+      expr: sum(rate(inventory_rpc_total{namespace="modernize-demo"}[1m]))
+
+    - record: inventory:rpc_errors:rate1m
+      # NOT_FOUND and ALREADY_EXISTS are the API telling a caller "no" - they
+      # are correct answers, not faults, so they are excluded deliberately.
+      expr: |
+        sum(rate(inventory_rpc_total{namespace="modernize-demo",
+                                     code!~"OK|NOT_FOUND|ALREADY_EXISTS"}[1m]))
+
+    - record: inventory:rpc_latency:p99
+      expr: |
+        histogram_quantile(0.99,
+          sum by (le) (rate(inventory_rpc_duration_seconds_bucket{namespace="modernize-demo"}[5m])))
+
+    # --- alerts -------------------------------------------------------------
+    - alert: InventoryBackendDown
+      expr: up{namespace="modernize-demo", job="inventory"} == 0
+      for: 2m
+      labels: { severity: warning }
+      annotations:
+        summary: "A backend replica is not being scraped"
+        description: "{{ $labels.pod }} has failed its scrape for 2 minutes."
+
+    - alert: InventoryErrorRateHigh
+      expr: inventory:rpc_errors:rate1m > 1
+      for: 5m
+      labels: { severity: warning }
+      annotations:
+        summary: "gRPC failures on the inventory service"
+        description: "{{ $value | printf \"%.2f\" }} failing calls/s, excluding NOT_FOUND and ALREADY_EXISTS."
+
+    - alert: InventoryLatencyHigh
+      # Measured baseline is a p99 of ~18ms in the handler, so 250ms is roughly
+      # an order of magnitude worse and means something has genuinely changed.
+      expr: inventory:rpc_latency:p99 > 0.25
+      for: 5m
+      labels: { severity: warning }
+      annotations:
+        summary: "Inventory p99 handler latency above 250ms"
+        description: "p99 is {{ $value | printf \"%.3f\" }}s; the measured baseline is about 0.018s."
+
+    - alert: InventoryAtMaxReplicas
+      # Sitting at the ceiling means the autoscaler has run out of room, which
+      # is the signal to raise maxReplicaCount rather than a fault in itself.
+      expr: |
+        kube_horizontalpodautoscaler_status_current_replicas{namespace="modernize-demo",
+                                                             horizontalpodautoscaler="keda-hpa-inventory"}
+        >= kube_horizontalpodautoscaler_spec_max_replicas{namespace="modernize-demo",
+                                                          horizontalpodautoscaler="keda-hpa-inventory"}
+      for: 10m
+      labels: { severity: info }
+      annotations:
+        summary: "Autoscaler pinned at maxReplicas"
+        description: "The inventory HPA has been at its ceiling for 10 minutes; consider raising maxReplicaCount."

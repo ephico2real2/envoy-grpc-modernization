@@ -55,9 +55,9 @@ deploy() {
            -f manifests/30-envoy.yaml -f manifests/40-kiosk.yaml
   # ServiceMonitor needs user-workload monitoring; skip quietly when the CRD is absent
   if oc get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
-    oc apply -f manifests/50-metrics.yaml
+    oc apply -f manifests/50-metrics.yaml -f manifests/60-alerts.yaml
   else
-    echo "no ServiceMonitor CRD - skipping manifests/50-metrics.yaml"
+    echo "no ServiceMonitor CRD - skipping manifests/50-metrics.yaml and 60-alerts.yaml"
   fi
   # All three consume their content from ConfigMaps, and `oc apply` on a
   # Deployment does not restart pods when only a ConfigMap changed. Envoy in

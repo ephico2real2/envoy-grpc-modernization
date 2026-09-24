@@ -3,9 +3,25 @@
 Red Hat's **Custom Metrics Autoscaler Operator** (KEDA, packaged and supported by
 Red Hat) scales the backend on the metric lab 01 added.
 
-CPU is the usual autoscaling signal and it is the wrong one for this service: it
-spends most of a request waiting on MongoDB, so CPU stays low while latency
-climbs. The honest signal is the request rate the service reports itself.
+CPU is the usual autoscaling signal. The measured case against it here is not
+that CPU stays flat — it is that **CPU utilisation is a ratio against a number
+somebody picked for scheduling**, so the same traffic reads as anything you like.
+
+At 1,076 rps with the autoscaler already pinned at 10 replicas:
+
+| Measured | Value |
+|---|---|
+| request rate | 1,076 rps |
+| CPU used ÷ CPU **limit** (500m) | **7.7%** |
+| CPU used ÷ CPU **request** (50m) | **77.4%** |
+
+An HPA's `averageUtilization` is computed against the **request**, so this
+workload reads 77.4% — just under a conventional 80% target, and it would barely
+scale. Raise the request to match the limit, a change with nothing to do with
+traffic, and the identical load reads 7.7% and the HPA never scales at all.
+
+Request rate has no such freedom: 1,076 rps is 1,076 rps. That is the argument
+for scaling on the metric the service reports itself.
 
 KEDA does not replace the HPA — it *feeds* one. `oc get hpa` shows a perfectly
 ordinary HorizontalPodAutoscaler; KEDA only supplies the external metric.
@@ -111,6 +127,13 @@ NAME                 REFERENCE              TARGETS            MINPODS   MAXPODS
 keda-hpa-inventory   Deployment/inventory   101467m/80 (avg)   3         10        10
 ```
 
+![replica count over time](../../docs/lab02/hpa-replicas-over-time.jpg)
+
+`kube_horizontalpodautoscaler_status_current_replicas` against the configured
+min and max. The staircase is the policy doing its job: a fast climb to the
+ceiling of 10, then the deliberate one-pod-per-60s descent once load stopped,
+then back up when it resumed.
+
 ![the HPA KEDA created, scaled to 10](../../docs/lab02/hpa-scaled.jpg)
 
 Managed by the `inventory` ScaledObject, driving an ordinary HPA: current 10,
@@ -119,6 +142,17 @@ desired 10, metric `s0-prometheus` against target 80.
 ![ten backend pods](../../docs/lab02/pods-scaled.jpg)
 
 Fourteen pods in the namespace: 2 Envoy, **10 inventory**, 1 MongoDB, 1 kiosk.
+
+### The alert that goes with it
+
+`InventoryAtMaxReplicas` from `manifests/60-alerts.yaml` fired on its own during
+this run — the autoscaler had genuinely been at its ceiling for ten minutes:
+
+![InventoryAtMaxReplicas firing](../../docs/lab02/alert-firing.jpg)
+
+That is the point of the rule. Being pinned at `maxReplicaCount` is not a fault
+to page someone about at 3am — it is the signal that the ceiling, not the
+traffic, is now deciding your capacity. Hence `severity: info` and `for: 10m`.
 
 Scaling out works because the backends are stateless — the catalogue is in
 MongoDB, so a pod that started 25 seconds ago serves the same data as one that

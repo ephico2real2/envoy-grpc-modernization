@@ -109,6 +109,86 @@ Two Envoy targets and three inventory targets, all `Up`.
 
 `sum by (pod) (rate(inventory_rpc_total[2m]))` — three pods, evenly matched.
 
+### Broken down by gRPC method
+
+![request rate by method](../../docs/lab01/metrics-by-method.jpg)
+
+`sum by (method) (rate(inventory_rpc_total[2m]))`. The interceptor labels every
+call, so the read mix falls out without touching a handler: **ListItems 617.9/s,
+GetItem 331.6/s**, and the write methods at zero because the load runner only
+reads. The dip and recovery in the graph is a load run ending and another
+starting.
+
+### Latency, from the histogram
+
+![p50 and p99 latency by method](../../docs/lab01/metrics-latency.jpg)
+
+`histogram_quantile(0.50, …)` over `inventory_rpc_duration_seconds_bucket`:
+**GetItem 0.54 ms, ListItems 1 ms** in the handler. Methods with no traffic in
+the window return `NaN` — correct, not a fault: there are no observations to
+take a quantile of.
+
+### The proxy tier
+
+![Envoy upstream request rate and endpoint count](../../docs/lab01/metrics-envoy.jpg)
+
+`envoy_cluster_upstream_rq_total` split by Envoy pod, alongside
+`envoy_cluster_membership_healthy{envoy_cluster_name="inventory"}` = **10** on
+both replicas. That second number is the headless Service seen from inside
+Envoy: it holds one endpoint per backend pod, and it tracked the autoscaler from
+3 to 10 without any configuration change.
+
+### Namespace resources
+
+![the namespace compute dashboard](../../docs/lab01/dashboard-namespace.jpg)
+
+Observe → Dashboards → *Kubernetes / Compute Resources / Namespace*. Worth
+reading next to lab 02: CPU is at **33% of limits** while the service handles
+about a thousand requests a second, which is the measurement that argues against
+using CPU as the autoscaling signal.
+
+## Alerting rules
+
+`manifests/60-alerts.yaml` adds three recording rules and four alerts.
+
+![the PrometheusRule in the console](../../docs/lab01/prometheusrule.jpg)
+
+**Where to look for them.** On OpenShift, a `PrometheusRule` in a *user*
+namespace is evaluated by **Thanos Ruler**, not by `prometheus-user-workload`.
+Querying the prometheus-user-workload pod's `/api/v1/rules` shows nothing and it
+is easy to conclude the rules never loaded. They had; they were somewhere else.
+
+```bash
+curl -sk -H "Authorization: Bearer $TOKEN" "https://$THANOS/api/v1/rules" \
+  | python3 -c "import json,sys; [print(r['type'], r['name'], r['health'])
+      for g in json.load(sys.stdin)['data']['groups'] if g['name']=='inventory.rules'
+      for r in g['rules']]"
+```
+```text
+recording inventory:rpc:rate1m
+recording inventory:rpc_errors:rate1m
+recording inventory:rpc_latency:p99
+alerting  InventoryBackendDown
+alerting  InventoryErrorRateHigh
+alerting  InventoryLatencyHigh
+alerting  InventoryAtMaxReplicas
+```
+
+Thanos Ruler reloads on a timer, so there is a lag of up to a minute between
+`oc apply` and the rules appearing.
+
+**What the error rule deliberately excludes.** `NOT_FOUND` and `ALREADY_EXISTS`
+are the API telling a caller "no" — correct answers, not faults. Counting them
+as errors would make the demo's own `404` and `409` tests page somebody:
+
+```promql
+sum(rate(inventory_rpc_total{code!~"OK|NOT_FOUND|ALREADY_EXISTS"}[1m]))
+```
+
+The latency threshold is set from the measured baseline rather than a round
+number: p99 in the handler is about 18 ms, so the alert fires at 250 ms — an
+order of magnitude worse, which means something genuinely changed.
+
 ## Note on `demo.sh metrics`
 
 The Envoy image ships no shell tooling — no `curl`, no `wget` — so the scrape
