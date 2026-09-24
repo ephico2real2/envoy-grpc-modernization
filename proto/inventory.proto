@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package legacy.inventory.v1;
+
+import "google/api/annotations.proto";
+
+// A deliberately plain gRPC service. It has no HTTP server, no JSON, and no
+// knowledge of the web. The http annotations below are read by Envoy's
+// grpc_json_transcoder to build a REST surface; the SERVICE never sees them.
+service Inventory {
+  rpc GetItem (GetItemRequest) returns (Item) {
+    option (google.api.http) = { get: "/v1/items/{sku}" };
+  }
+  rpc ListItems (ListItemsRequest) returns (ListItemsResponse) {
+    option (google.api.http) = { get: "/v1/items" };
+  }
+  rpc ReserveStock (ReserveStockRequest) returns (ReserveStockResponse) {
+    option (google.api.http) = { post: "/v1/items/{sku}:reserve" body: "*" };
+  }
+  // Puts every reservation back to zero so the demo can be run again from a
+  // known state. A collection-level verb, so the path has no {sku}.
+  rpc ResetStock (ResetStockRequest) returns (ResetStockResponse) {
+    option (google.api.http) = { post: "/v1/items:reset" body: "*" };
+  }
+  // Writes a new item. POST to the collection is the REST idiom for create, and
+  // it is the same verb as :reserve - the suffix after the colon is what tells
+  // the transcoder which of the two POST routes a request belongs to.
+  rpc CreateItem (CreateItemRequest) returns (Item) {
+    option (google.api.http) = { post: "/v1/items" body: "item" };
+  }
+  rpc DeleteItem (DeleteItemRequest) returns (DeleteItemResponse) {
+    option (google.api.http) = { delete: "/v1/items/{sku}" };
+  }
+}
+
+message Item {
+  string sku       = 1;
+  string name      = 2;
+  int32  on_hand   = 3;
+  int32  reserved  = 4;
+  string warehouse = 5;
+  // Which backend pod produced this reply. State lives in MongoDB, so any
+  // replica can answer any call - this field is how the kiosk shows Envoy
+  // spreading requests across them.
+  string served_by = 6;
+}
+
+message GetItemRequest    { string sku = 1; }
+message ListItemsRequest  { string warehouse = 1; int32 page_size = 2; }
+message ListItemsResponse { repeated Item items = 1; int32 total = 2; string served_by = 3; }
+message ReserveStockRequest  { string sku = 1; int32 quantity = 2; string order_id = 3; }
+message ReserveStockResponse { string sku = 1; int32 reserved = 2; bool ok = 3; string message = 4; string served_by = 5; }
+message ResetStockRequest    {}
+message ResetStockResponse   { int32 items_reset = 1; string message = 2; string served_by = 3; }
+// body: "item" binds the JSON body to this one field, so the wire format is the
+// bare item object rather than {"item": {...}}.
+message CreateItemRequest    { Item item = 1; }
+message DeleteItemRequest    { string sku = 1; }
+message DeleteItemResponse   { string sku = 1; bool deleted = 2; string message = 3; string served_by = 4; }

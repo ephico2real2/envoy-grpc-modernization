@@ -1,0 +1,18 @@
+# The operator creates a KedaController named `keda` on install, so applying
+# this is usually a no-op. It is kept in the repo so the lab is reproducible on
+# a cluster where that default is absent or has been deleted.
+apiVersion: keda.sh/v1alpha1
+kind: KedaController
+metadata:
+  name: keda
+  namespace: openshift-keda
+spec:
+  watchNamespace: ''            # all namespaces
+  operator:
+    logLevel: info
+    logEncoder: console
+  metricsServer:
+    logLevel: '0'
+  admissionWebhooks:
+    logLevel: info
+    logEncoder: console

@@ -1,0 +1,28 @@
+# Red Hat's Custom Metrics Autoscaler Operator - KEDA, packaged and supported
+# by Red Hat. It adds ScaledObject/TriggerAuthentication and drives a plain
+# HorizontalPodAutoscaler underneath, so the scaling you see is still core HPA;
+# KEDA only supplies the external metric.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-keda
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-keda
+  namespace: openshift-keda
+spec:
+  targetNamespaces: []          # empty = all namespaces, which KEDA requires
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: openshift-custom-metrics-autoscaler-operator
+  namespace: openshift-keda
+spec:
+  channel: stable
+  name: openshift-custom-metrics-autoscaler-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic

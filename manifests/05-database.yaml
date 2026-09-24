@@ -1,0 +1,63 @@
+# Layer 0: the datastore the legacy service was always missing.
+#
+# Single MongoDB pod with a PVC. Credentials come from the inventory-db Secret,
+# which demo.sh creates with a generated password - nothing secret is committed.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: inventory-db
+  namespace: modernize-demo
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: crc-csi-hostpath-provisioner
+  resources:
+    requests: { storage: 2Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-db
+  namespace: modernize-demo
+  labels: { app: inventory-db }
+spec:
+  selector: { app: inventory-db }
+  ports:
+  - { name: mongo, port: 27017, targetPort: 27017 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-db
+  namespace: modernize-demo
+  labels: { app: inventory-db }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }          # one writer, one volume
+  selector: { matchLabels: { app: inventory-db } }
+  template:
+    metadata:
+      labels: { app: inventory-db }
+    spec:
+      containers:
+      - name: mongodb
+        image: mongodb/mongodb-community-server:8.3.4-ubi9
+        env:
+        - name: MONGODB_INITDB_ROOT_USERNAME
+          valueFrom: { secretKeyRef: { name: inventory-db, key: username } }
+        - name: MONGODB_INITDB_ROOT_PASSWORD
+          valueFrom: { secretKeyRef: { name: inventory-db, key: password } }
+        ports:
+        - { name: mongo, containerPort: 27017 }
+        volumeMounts:
+        - { name: data, mountPath: /data/db }
+        readinessProbe:
+          tcpSocket: { port: 27017 }
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 30
+        resources:
+          requests: { cpu: "100m", memory: "256Mi" }
+          limits:   { cpu: "1",    memory: "1Gi" }
+      volumes:
+      - name: data
+        persistentVolumeClaim: { claimName: inventory-db }

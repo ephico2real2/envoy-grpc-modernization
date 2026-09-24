@@ -1,0 +1,61 @@
+# Layer 3 of 3: the kiosk. A browser page that speaks REST and JSON only.
+#
+# It is served through Envoy on the same origin as the API, so it needs no
+# cross-origin configuration and no knowledge that gRPC exists anywhere.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kiosk
+  namespace: modernize-demo
+  labels: { app: kiosk }
+spec:
+  selector: { app: kiosk }
+  ports:
+  - { name: http, port: 8080, targetPort: 8080 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kiosk
+  namespace: modernize-demo
+  labels: { app: kiosk }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: kiosk } }
+  template:
+    metadata:
+      labels: { app: kiosk }
+    spec:
+      containers:
+      - name: kiosk
+        image: python:3.12-slim
+        # stdlib only: no pip, no egress needed
+        command: ["python","-m","http.server","8080","--directory","/site"]
+        ports:
+        - { name: http, containerPort: 8080 }
+        volumeMounts:
+        - { name: site, mountPath: /site }
+        readinessProbe:
+          httpGet: { path: /index.html, port: 8080 }
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        resources:
+          requests: { cpu: "20m",  memory: "48Mi" }
+          limits:   { cpu: "200m", memory: "128Mi" }
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: { drop: ["ALL"] }
+      volumes:
+      - name: site
+        configMap: { name: kiosk-src }
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: kiosk
+  namespace: modernize-demo
+spec:
+  to: { kind: Service, name: envoy, weight: 100 }
+  port: { targetPort: http }
+  tls: { termination: edge, insecureEdgeTerminationPolicy: Redirect }
+  wildcardPolicy: None

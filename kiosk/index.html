@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Depot Kiosk</title>
+<style>
+  :root{--bg:#0e131a;--card:#151c25;--ink:#e5e9ef;--dim:#9aa5b3;--line:#2a3440;
+        --ok:#3fcfc0;--warn:#f0a53c;--bad:#f2857c;
+        --mono:ui-monospace,"SF Mono",Menlo,monospace}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 18px 60px}
+  header{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between;
+         border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:22px}
+  h1{font-size:22px;margin:0}
+  .sub{color:var(--dim);font-size:13px}
+  .badge{font:12px var(--mono);border:1px solid var(--line);border-radius:999px;
+         padding:3px 10px;color:var(--dim)}
+  .grid{display:grid;grid-template-columns:1fr;gap:18px}
+  @media(min-width:860px){.grid{grid-template-columns:1.25fr .95fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+  .card h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);
+           margin:0 0 12px;font-weight:600}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{font:11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--dim);
+     text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:8px;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:0}
+  .sku{font:13px var(--mono)}
+  .free{font:13px var(--mono)}
+  .out{color:var(--bad)} .low{color:var(--warn)} .good{color:var(--ok)}
+  button{font:inherit;background:var(--ok);color:#06231f;border:0;border-radius:7px;
+         padding:8px 14px;cursor:pointer;font-weight:600}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:400}
+  .row.addrow{grid-template-columns:1fr 1.6fr .7fr .9fr auto}
+  @media (max-width:760px){ .row.addrow{grid-template-columns:1fr} }
+  button.del{background:transparent;color:var(--sub);border:1px solid var(--line);
+    font-weight:400;padding:1px 8px;border-radius:5px;line-height:1.4}
+  button.del:hover{color:var(--bad);border-color:var(--bad)}
+  table td:last-child{text-align:right;width:1%}
+  input,select{font:inherit;background:#0b1118;color:var(--ink);border:1px solid var(--line);
+               border-radius:7px;padding:8px 10px;width:100%}
+  label{display:block;font-size:12px;color:var(--dim);margin:0 0 4px}
+  .row{display:grid;grid-template-columns:1fr 110px auto;gap:10px;align-items:end}
+  pre{margin:0;font:12px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word;
+      background:#0b1118;border:1px solid var(--line);border-radius:8px;padding:12px;
+      overflow:auto}
+  /* the request is always short; the response can be long, so give it the room
+     and let it scroll rather than clipping the JSON */
+  pre#req{max-height:140px}
+  pre#res{max-height:620px;min-height:320px}
+  /* keep the wire card beside a tall stock table rather than ending early */
+  .grid{align-items:start}
+  .card.wire-card{position:sticky;top:18px}
+  .wire{display:grid;gap:10px}
+  .wire .lbl{font:11px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+  .note{color:var(--dim);font-size:12.5px;margin-top:10px}
+  .flash{color:var(--ok)} .flasherr{color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Depot Kiosk</h1>
+      <div class="sub">Stock enquiry and reservation terminal</div>
+    </div>
+    <div>
+      <span class="badge">this page speaks <strong>REST / JSON</strong></span>
+      <span class="badge">the service speaks <strong>gRPC only</strong></span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Stock on hand</h2>
+      <div class="row" style="grid-template-columns:1fr auto;margin-bottom:14px">
+        <div>
+          <label for="wh">Warehouse</label>
+          <select id="wh">
+            <option value="">All warehouses</option>
+            <option value="LEEDS">LEEDS</option>
+            <option value="DERBY">DERBY</option>
+            <option value="LOS ANGELES">LOS ANGELES</option>
+            <option value="CHICAGO">CHICAGO</option>
+            <option value="NEW YORK">NEW YORK</option>
+            <option value="HOUSTON">HOUSTON</option>
+          </select>
+        </div>
+        <button class="ghost" id="refresh">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>SKU</th><th>Item</th><th>Warehouse</th><th>Free</th><th></th></tr></thead>
+        <tbody id="rows"><tr><td colspan="5" class="sub">loading…</td></tr></tbody>
+      </table>
+      <div class="note sub" id="servedby" style="margin-top:8px">&nbsp;</div>
+
+      <h2 style="margin-top:22px">Add an item</h2>
+      <div class="row addrow">
+        <div>
+          <label for="nsku">SKU</label>
+          <input id="nsku" placeholder="SKU-2001">
+        </div>
+        <div>
+          <label for="nname">Description</label>
+          <input id="nname" placeholder="Coupling, 40mm">
+        </div>
+        <div>
+          <label for="nqty">On hand</label>
+          <input id="nqty" type="number" min="0" value="25">
+        </div>
+        <div>
+          <label for="nwh">Warehouse</label>
+          <select id="nwh">
+            <option>LEEDS</option>
+            <option>DERBY</option>
+            <option>LOS ANGELES</option>
+            <option>CHICAGO</option>
+            <option>NEW YORK</option>
+            <option>HOUSTON</option>
+          </select>
+        </div>
+        <button id="add">Add</button>
+      </div>
+      <div class="note sub" style="margin-top:6px;font-size:12.5px">
+        writes straight through to MongoDB &mdash; POST <code>/v1/items</code> becomes
+        <code>rpc CreateItem</code>
+      </div>
+
+      <h2 style="margin-top:22px">Reserve stock</h2>
+      <div class="row">
+        <div>
+          <label for="sku">SKU</label>
+          <input id="sku" placeholder="SKU-1001" value="SKU-1001">
+        </div>
+        <div>
+          <label for="qty">Quantity</label>
+          <input id="qty" type="number" min="1" value="2">
+        </div>
+        <button id="reserve">Reserve</button>
+      </div>
+      <div class="note" id="flash">&nbsp;</div>
+      <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="ghost" id="reset">Reset all reservations</button>
+        <span class="sub" style="font-size:12.5px">puts every item back to zero reserved</span>
+      </div>
+    </div>
+
+    <div class="card wire-card">
+      <h2>What just went over the wire</h2>
+      <div class="wire">
+        <div>
+          <div class="lbl">browser sent</div>
+          <pre id="req">—</pre>
+        </div>
+        <div>
+          <div class="lbl">browser received</div>
+          <pre id="res">—</pre>
+        </div>
+      </div>
+      <div class="note">
+        <strong>Sent</strong> is the literal HTTP request this page made &mdash; method, path
+        and JSON body. <strong>Received</strong> is the status, the round trip in
+        milliseconds, and the full response body, scrollable when it is long.
+        <br><br>
+        Neither is gRPC. Envoy turns each call into a gRPC request against
+        <code>legacy.inventory.v1.Inventory</code> and turns the protobuf reply back into
+        the JSON you see. The service has no HTTP server, so nothing in either box could
+        have reached it directly.
+        <br><br>
+        <code>servedBy</code> in the response names the backend pod that answered. The
+        inventory Service is headless, so Envoy holds a connection to each of the three
+        replicas and picks one per request &mdash; refresh a few times and the name changes.
+        State lives in MongoDB, which is why any replica can answer and why an item added
+        here survives a restart.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// The API base. Served through the same Route as this page by default, so the
+// kiosk works with no configuration; override with ?api=https://host for a
+// split deployment.
+const API = new URLSearchParams(location.search).get("api") || "";
+
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g,
+  c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const show = (m, url, body, out) => {
+  $("req").textContent = m + " " + url + (body ? "\n\n" + JSON.stringify(body, null, 2) : "");
+  $("res").textContent = out;
+};
+
+async function call(method, path, body, quiet) {
+  const url = API + path;
+  const opt = { method, headers: { "Accept": "application/json" } };
+  if (body) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
+  const t0 = performance.now();
+  let res, text;
+  try {
+    res = await fetch(url, opt);
+    text = await res.text();
+  } catch (e) {
+    if (!quiet) show(method, url, body, "network error: " + e.message);
+    throw e;
+  }
+  const ms = Math.round(performance.now() - t0);
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch (_) {}
+  // The refresh that follows an action passes quiet, so the panel keeps showing
+  // the POST or DELETE the operator actually triggered rather than the GET.
+  if (!quiet) show(method, url, body,
+       "HTTP " + res.status + "   " + ms + " ms\n\n" + (parsed ? JSON.stringify(parsed, null, 2) : text));
+  if (!res.ok) {
+    const err = new Error("HTTP " + res.status);
+    err.status = res.status;          // add() distinguishes 409 from the rest
+    throw err;
+  }
+  return parsed;
+}
+
+function freeCell(it) {
+  const free = (it.onHand || 0) - (it.reserved || 0);
+  const cls = free === 0 ? "out" : free < 10 ? "low" : "good";
+  return '<span class="free ' + cls + '">' + free + " of " + (it.onHand || 0) + "</span>";
+}
+
+async function load(quiet) {
+  const wh = $("wh").value;
+  const q = wh ? "?warehouse=" + encodeURIComponent(wh) : "";
+  try {
+    const data = await call("GET", "/v1/items" + q, null, quiet);
+    const items = (data && data.items) || [];
+    $("rows").innerHTML = items.length
+      ? items.map(it =>
+          "<tr><td class='sku'>" + esc(it.sku) + "</td><td>" + esc(it.name) +
+          "</td><td class='sku'>" + esc(it.warehouse) + "</td><td>" + freeCell(it) +
+          "</td><td><button class='del' data-sku='" + esc(it.sku) +
+          "' title='delete " + esc(it.sku) + "'>&times;</button></td></tr>").join("")
+      : "<tr><td colspan='5' class='sub'>no items</td></tr>";
+    $("servedby").innerHTML = data && data.servedBy
+      ? "served by <code>" + esc(data.servedBy) + "</code> &middot; " +
+        (data.total || 0) + " item(s) in MongoDB"
+      : "&nbsp;";
+    document.querySelectorAll("button.del").forEach(b => { b.onclick = () => del(b.dataset.sku); });
+  } catch (e) {
+    $("rows").innerHTML = "<tr><td colspan='5' class='sub'>could not reach the API</td></tr>";
+    $("servedby").innerHTML = "&nbsp;";
+  }
+}
+
+async function add() {
+  const sku  = $("nsku").value.trim();
+  const name = $("nname").value.trim();
+  const qty  = parseInt($("nqty").value, 10);
+  if (!sku || !name) {
+    $("flash").className = "note flasherr";
+    $("flash").textContent = "SKU and description are both required";
+    return;
+  }
+  $("add").disabled = true;
+  try {
+    // POST /v1/items  ->  rpc CreateItem.  body: "item" in the proto means the
+    // JSON body IS the item, not {"item": {...}}.
+    const out = await call("POST", "/v1/items",
+                           { sku: sku, name: name, onHand: isNaN(qty) ? 0 : qty,
+                             warehouse: $("nwh").value });
+    $("flash").className = "note flash";
+    $("flash").textContent = "added " + out.sku + " (written by " + (out.servedBy || "?") + ")";
+    $("nsku").value = ""; $("nname").value = "";
+    await load(true);
+  } catch (e) {
+    $("flash").className = "note flasherr";
+    // 409 is a duplicate sku: gRPC ALREADY_EXISTS, mapped by convert_grpc_status.
+    $("flash").textContent = e.status === 409
+      ? "that SKU already exists" : "could not add - see the wire panel";
+  } finally {
+    $("add").disabled = false;
+  }
+}
+
+async function del(sku) {
+  try {
+    // DELETE /v1/items/{sku}  ->  rpc DeleteItem
+    const out = await call("DELETE", "/v1/items/" + encodeURIComponent(sku));
+    $("flash").className = "note flash";
+    $("flash").textContent = (out && out.message) || ("deleted " + sku);
+    await load(true);
+  } catch (e) {
+    $("flash").className = "note flasherr";
+    $("flash").textContent = "could not delete " + sku + " - see the wire panel";
+  }
+}
+
+async function reserve() {
+  const sku = $("sku").value.trim();
+  const qty = parseInt($("qty").value, 10) || 0;
+  $("reserve").disabled = true;
+  $("flash").textContent = "";
+  try {
+    // POST /v1/items/{sku}:reserve  ->  rpc ReserveStock
+    const out = await call("POST", "/v1/items/" + encodeURIComponent(sku) + ":reserve",
+                           { quantity: qty, orderId: "KIOSK-" + Date.now() });
+    $("flash").className = "note " + (out && out.ok ? "flash" : "flasherr");
+    $("flash").textContent = (out && out.message) || "done";
+    await load(true);
+  } catch (e) {
+    $("flash").className = "note flasherr";
+    $("flash").textContent = "reservation failed - see the wire panel";
+  } finally {
+    $("reserve").disabled = false;
+  }
+}
+
+async function reset() {
+  $("reset").disabled = true;
+  try {
+    // POST /v1/items:reset  ->  rpc ResetStock   (collection verb, no {sku})
+    const out = await call("POST", "/v1/items:reset", {});
+    $("flash").className = "note flash";
+    $("flash").textContent = (out && out.message) || "reset";
+    await load(true);
+  } catch (e) {
+    $("flash").className = "note flasherr";
+    $("flash").textContent = "reset failed - see the wire panel";
+  } finally {
+    $("reset").disabled = false;
+  }
+}
+
+$("refresh").onclick = load;
+$("add").onclick = add;
+$("reset").onclick = reset;
+$("wh").onchange = load;
+$("reserve").onclick = reserve;
+load();
+</script>
+</body>
+</html>

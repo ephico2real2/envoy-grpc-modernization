@@ -1,0 +1,56 @@
+# Layer 2 of 3: Envoy, as its own Deployment in front of the application.
+#
+# Not a sidecar and not operator-managed: this one is yours, so you pick the
+# version and the filter chain. Config comes from the envoy-config ConfigMap and
+# the proto descriptor from envoy-proto, which is created from proto/inventory.pb
+# (see the README - it is binary, so it is not inlined here).
+apiVersion: v1
+kind: Service
+metadata:
+  name: envoy
+  namespace: modernize-demo
+  labels: { app: envoy }
+spec:
+  selector: { app: envoy }
+  ports:
+  - { name: http,  port: 8080, targetPort: 8080 }
+  - { name: admin, port: 9901, targetPort: 9901 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envoy
+  namespace: modernize-demo
+  labels: { app: envoy }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: envoy } }
+  template:
+    metadata:
+      labels: { app: envoy }
+    spec:
+      containers:
+      - name: envoy
+        image: envoyproxy/envoy:v1.39-latest
+        args: ["-c","/etc/envoy/envoy.yaml","--log-level","info"]
+        ports:
+        - { name: http,  containerPort: 8080 }
+        - { name: admin, containerPort: 9901 }
+        volumeMounts:
+        - { name: config, mountPath: /etc/envoy/envoy.yaml, subPath: envoy.yaml }
+        - { name: proto,  mountPath: /etc/envoy/proto }
+        readinessProbe:
+          httpGet: { path: /ready, port: 9901 }
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        resources:
+          requests: { cpu: "50m",  memory: "64Mi" }
+          limits:   { cpu: "500m", memory: "256Mi" }
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: { drop: ["ALL"] }
+      volumes:
+      - name: config
+        configMap: { name: envoy-config }
+      - name: proto
+        configMap: { name: envoy-proto }

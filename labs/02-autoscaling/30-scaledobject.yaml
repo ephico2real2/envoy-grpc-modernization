@@ -1,0 +1,144 @@
+# Scale the backend on the work it is actually doing.
+#
+# CPU is the usual autoscaling signal and it is the wrong one here: this service
+# spends most of a request waiting on MongoDB, so CPU stays low while latency
+# climbs. The honest signal is the request rate the service itself reports -
+# inventory_rpc_total, the counter added in lab 01.
+#
+# KEDA queries Thanos, converts the result into an external metric, and drives a
+# plain HorizontalPodAutoscaler. `oc get hpa` shows the result; KEDA only
+# supplies the number.
+---
+# The scaler authenticates to Thanos as this ServiceAccount, which needs
+# cluster-monitoring-view. Grant it with:
+#   oc adm policy add-cluster-role-to-user cluster-monitoring-view \
+#     -z keda-metrics-reader -n modernize-demo
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keda-metrics-reader
+  namespace: modernize-demo
+---
+# What the tenancy port (9092) actually requires. Read it from the cluster
+# rather than guessing - secret/thanos-querier-kube-rbac-proxy in
+# openshift-monitoring holds the policy it enforces:
+#
+#   resourceAttributes:
+#     apiGroup: metrics.k8s.io        <- NOT the core group
+#     resource: pods
+#     namespace: "{{ .Value }}"       <- taken from the ?namespace= parameter
+#
+# So the grant is `get pods` in the metrics.k8s.io API group. Granting core
+# "" pods does nothing here, and neither does cluster-monitoring-view on its
+# own; both produce:
+#   prometheus query api returned error. status: 403
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: keda-tenancy-read
+  namespace: modernize-demo
+rules:
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: keda-tenancy-read
+  namespace: modernize-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: keda-tenancy-read
+subjects:
+- kind: ServiceAccount
+  name: keda-metrics-reader
+  namespace: modernize-demo
+---
+# boundServiceAccountToken makes the KEDA OPERATOR mint the token, so it is the
+# operator's ServiceAccount that needs permission to do so - in THIS namespace,
+# for THIS ServiceAccount. Without it the ScaledObject never becomes Ready and
+# the operator log says:
+#   serviceaccounts "keda-metrics-reader" is forbidden: User
+#   "system:serviceaccount:openshift-keda:keda-operator" cannot create resource
+#   "serviceaccounts/token" ... in the namespace "modernize-demo"
+# resourceNames keeps the grant to the one ServiceAccount.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: keda-token-minter
+  namespace: modernize-demo
+rules:
+- apiGroups: [""]
+  resources: ["serviceaccounts/token"]
+  resourceNames: ["keda-metrics-reader"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: keda-token-minter
+  namespace: modernize-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: keda-token-minter
+subjects:
+- kind: ServiceAccount
+  name: keda-operator
+  namespace: openshift-keda
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: thanos-auth
+  namespace: modernize-demo
+spec:
+  # boundServiceAccountToken makes KEDA mint a short-lived token for the
+  # ServiceAccount itself. No long-lived secret is created or committed.
+  boundServiceAccountToken:
+  - parameter: bearerToken
+    serviceAccountName: keda-metrics-reader
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: inventory
+  namespace: modernize-demo
+spec:
+  scaleTargetRef:
+    name: inventory
+  minReplicaCount: 3
+  maxReplicaCount: 10
+  pollingInterval: 15           # how often KEDA queries Thanos
+  cooldownPeriod: 60
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          # React within one polling interval rather than the 15s default
+          # stabilisation, so the lab shows movement while you watch it.
+          stabilizationWindowSeconds: 0
+          policies:
+          - { type: Pods, value: 3, periodSeconds: 15 }
+        scaleDown:
+          # Slow down, so a brief dip does not throw away warm pods.
+          stabilizationWindowSeconds: 120
+          policies:
+          - { type: Pods, value: 1, periodSeconds: 60 }
+  triggers:
+  - type: prometheus
+    metricType: AverageValue     # threshold is PER POD, which is what makes
+                                 # the target replica count arithmetic obvious
+    authenticationRef:
+      name: thanos-auth
+    metadata:
+      # The tenancy port (9092) scopes every query to one namespace and is what
+      # a non-cluster-admin ServiceAccount is allowed to use.
+      serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9092
+      namespace: modernize-demo
+      query: sum(rate(inventory_rpc_total{namespace="modernize-demo"}[1m]))
+      threshold: "80"            # 80 rps per pod -> 240 rps keeps 3 pods
+      authModes: bearer
+      unsafeSsl: "true"          # the in-cluster serving cert is not in the scaler's trust store

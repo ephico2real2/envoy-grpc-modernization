@@ -1,0 +1,7 @@
+.DS_Store
+*.pyc
+__pycache__/
+.venv/
+# Only the top-level scratch directory - the labs commit their measured
+# results as evidence, and a bare "results/" would silently swallow those too.
+/results/

@@ -1,0 +1,22 @@
+{
+  "requests": 73989,
+  "seconds": 60.01,
+  "rps": 1233.0,
+  "errors": 0,
+  "codes": {
+    "200": 73989
+  },
+  "latency_ms": {
+    "min": 2.6,
+    "p50": 8.9,
+    "p90": 27.8,
+    "p99": 59.0,
+    "max": 116.2,
+    "mean": 12.9
+  },
+  "served_by": {
+    "inventory-8467457d96-8b24l": 24667,
+    "inventory-8467457d96-9f4pr": 24660,
+    "inventory-8467457d96-4zhx2": 24662
+  }
+}

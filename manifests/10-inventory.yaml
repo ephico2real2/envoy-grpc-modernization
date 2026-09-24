@@ -1,0 +1,101 @@
+# Layer 1 of 3: the backend. It speaks gRPC and nothing else - no HTTP server,
+# no JSON, no CORS. A browser cannot call it and neither can curl.
+#
+# Three replicas. State lives in MongoDB rather than in the process, so the
+# replicas are interchangeable and Envoy can spread calls over all of them -
+# every reply names the pod that produced it, which is how the kiosk shows it.
+#
+# Packaged the same way as the search GUI in this repository: source from a
+# ConfigMap on a stock python image, so there is no image to build and no
+# registry to push to. grpcio is installed at start; the pod needs egress to
+# pypi for that first few seconds.
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory
+  namespace: modernize-demo
+  labels: { app: inventory }
+spec:
+  # Headless on purpose. A ClusterIP Service resolves to ONE virtual IP, so
+  # Envoy's STRICT_DNS would see a single endpoint, its round-robin would have
+  # nothing to choose between, and kube-proxy would pin the one long-lived
+  # HTTP/2 connection to one pod for the life of that connection.
+  # clusterIP: None makes DNS return every pod IP, so Envoy gets three
+  # endpoints and balances per request rather than per connection.
+  clusterIP: None
+  selector: { app: inventory }
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+  - name: metrics
+    port: 9100
+    targetPort: 9100
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory
+  namespace: modernize-demo
+  labels: { app: inventory }
+spec:
+  replicas: 3
+  selector: { matchLabels: { app: inventory } }
+  template:
+    metadata:
+      labels: { app: inventory }
+    spec:
+      containers:
+      - name: inventory
+        image: python:3.12-slim
+        command: ["/bin/sh","-c"]
+        args:
+          - |
+            # OpenShift runs this container as a random UID with no writable
+            # HOME, so a default `pip install` fails with
+            #   Permission denied: '/.local'
+            # Install into a writable emptyDir and point PYTHONPATH at it.
+            # googleapis-common-protos supplies google.api.annotations_pb2, which
+            # the generated stub imports because inventory.proto imports the http
+            # annotations. The service never reads them - only Envoy does - but the
+            # generated module will not import without the package present.
+            pip install --no-cache-dir --quiet --target=/pylibs \
+                grpcio grpcio-reflection protobuf googleapis-common-protos pymongo \
+                prometheus-client
+            exec python /app/server.py
+        env:
+        - name: PORT
+          value: "50051"
+        - name: MONGO_URL
+          valueFrom:
+            secretKeyRef: { name: inventory-db, key: connection-string }
+        - name: METRICS_PORT
+          value: "9100"
+        - name: POD_NAME
+          valueFrom: { fieldRef: { fieldPath: metadata.name } }
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONPATH
+          value: "/pylibs:/app"
+        ports:
+        - { name: grpc,    containerPort: 50051 }
+        - { name: metrics, containerPort: 9100 }
+        volumeMounts:
+        - { name: src,    mountPath: /app }
+        - { name: pylibs, mountPath: /pylibs }
+        readinessProbe:
+          tcpSocket: { port: 50051 }
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          failureThreshold: 30
+        resources:
+          requests: { cpu: "50m",  memory: "128Mi" }
+          limits:   { cpu: "500m", memory: "512Mi" }
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: { drop: ["ALL"] }
+      volumes:
+      - name: src
+        configMap: { name: inventory-src }
+      - name: pylibs
+        emptyDir: {}

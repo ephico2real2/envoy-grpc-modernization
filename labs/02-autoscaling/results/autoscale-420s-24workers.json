@@ -1,0 +1,29 @@
+{
+  "requests": 594818,
+  "seconds": 420.01,
+  "rps": 1416.2,
+  "errors": 0,
+  "codes": {
+    "200": 594818
+  },
+  "latency_ms": {
+    "min": 2.7,
+    "p50": 13.5,
+    "p90": 27.4,
+    "p99": 68.4,
+    "max": 423.7,
+    "mean": 16.9
+  },
+  "served_by": {
+    "inventory-8467457d96-9f4pr": 115352,
+    "inventory-8467457d96-8b24l": 115351,
+    "inventory-8467457d96-4zhx2": 115346,
+    "inventory-8467457d96-5mj6q": 38126,
+    "inventory-8467457d96-v2r27": 38124,
+    "inventory-8467457d96-dhmsw": 38125,
+    "inventory-8467457d96-w52bv": 34156,
+    "inventory-8467457d96-s27hv": 34154,
+    "inventory-8467457d96-pf5qn": 34156,
+    "inventory-8467457d96-m5gzm": 31928
+  }
+}

@@ -1,0 +1,51 @@
+# Observability for both tiers.
+#
+#   envoy-stats  + servicemonitor/envoy      -> /stats/prometheus on the admin port
+#   svc/inventory + servicemonitor/inventory -> /metrics from the application
+#
+# Both need user-workload monitoring enabled on the cluster; labs/01-metrics
+# has the one-liner and how to check it took.
+apiVersion: v1
+kind: Service
+metadata:
+  name: envoy-stats
+  namespace: modernize-demo
+  labels:
+    app: envoy
+    app.kubernetes.io/component: observability
+spec:
+  selector: { app: envoy }
+  ports:
+  - { name: admin, port: 9901, targetPort: 9901 }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: envoy
+  namespace: modernize-demo
+  labels: { app.kubernetes.io/part-of: modernize-demo }
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: observability
+  endpoints:
+  - port: admin
+    path: /stats/prometheus
+    interval: 15s
+---
+# The inventory Service is headless, so this scrapes every backend pod
+# individually - which is what makes a per-pod request rate visible, and what
+# the autoscaling lab builds on.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: inventory
+  namespace: modernize-demo
+  labels: { app.kubernetes.io/part-of: modernize-demo }
+spec:
+  selector:
+    matchLabels: { app: inventory }
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
