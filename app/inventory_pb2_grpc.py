@@ -67,6 +67,26 @@ class InventoryStub:
                 request_serializer=inventory__pb2.DeleteItemRequest.SerializeToString,
                 response_deserializer=inventory__pb2.DeleteItemResponse.FromString,
                 _registered_method=True)
+        self.UpdateItem = channel.unary_unary(
+                '/legacy.inventory.v1.Inventory/UpdateItem',
+                request_serializer=inventory__pb2.UpdateItemRequest.SerializeToString,
+                response_deserializer=inventory__pb2.Item.FromString,
+                _registered_method=True)
+        self.RestockItem = channel.unary_unary(
+                '/legacy.inventory.v1.Inventory/RestockItem',
+                request_serializer=inventory__pb2.RestockItemRequest.SerializeToString,
+                response_deserializer=inventory__pb2.Item.FromString,
+                _registered_method=True)
+        self.ListWarehouses = channel.unary_unary(
+                '/legacy.inventory.v1.Inventory/ListWarehouses',
+                request_serializer=inventory__pb2.ListWarehousesRequest.SerializeToString,
+                response_deserializer=inventory__pb2.ListWarehousesResponse.FromString,
+                _registered_method=True)
+        self.GetWarehouse = channel.unary_unary(
+                '/legacy.inventory.v1.Inventory/GetWarehouse',
+                request_serializer=inventory__pb2.GetWarehouseRequest.SerializeToString,
+                response_deserializer=inventory__pb2.GetWarehouseResponse.FromString,
+                _registered_method=True)
 
 
 class InventoryServicer:
@@ -116,6 +136,39 @@ class InventoryServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def UpdateItem(self, request, context):
+        """CreateItem deliberately refuses an existing sku, so changing one needs its
+        own verb. PATCH is the REST idiom for a PARTIAL update: fields left out of
+        the body are left alone, which is why the request carries a field_mask.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RestockItem(self, request, context):
+        """Restocking is the common case and deserves a verb of its own: it ADDS to
+        on_hand rather than replacing it, so two concurrent deliveries cannot
+        overwrite each other the way two PATCHes would.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListWarehouses(self, request, context):
+        """Warehouses are their own collection, not a filter on items. The summary is
+        computed by the database with an aggregation rather than by counting rows
+        in the service, so it stays correct as the catalogue grows.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetWarehouse(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_InventoryServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -148,6 +201,26 @@ def add_InventoryServicer_to_server(servicer, server):
                     servicer.DeleteItem,
                     request_deserializer=inventory__pb2.DeleteItemRequest.FromString,
                     response_serializer=inventory__pb2.DeleteItemResponse.SerializeToString,
+            ),
+            'UpdateItem': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateItem,
+                    request_deserializer=inventory__pb2.UpdateItemRequest.FromString,
+                    response_serializer=inventory__pb2.Item.SerializeToString,
+            ),
+            'RestockItem': grpc.unary_unary_rpc_method_handler(
+                    servicer.RestockItem,
+                    request_deserializer=inventory__pb2.RestockItemRequest.FromString,
+                    response_serializer=inventory__pb2.Item.SerializeToString,
+            ),
+            'ListWarehouses': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListWarehouses,
+                    request_deserializer=inventory__pb2.ListWarehousesRequest.FromString,
+                    response_serializer=inventory__pb2.ListWarehousesResponse.SerializeToString,
+            ),
+            'GetWarehouse': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetWarehouse,
+                    request_deserializer=inventory__pb2.GetWarehouseRequest.FromString,
+                    response_serializer=inventory__pb2.GetWarehouseResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -315,6 +388,114 @@ class Inventory:
             '/legacy.inventory.v1.Inventory/DeleteItem',
             inventory__pb2.DeleteItemRequest.SerializeToString,
             inventory__pb2.DeleteItemResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateItem(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/legacy.inventory.v1.Inventory/UpdateItem',
+            inventory__pb2.UpdateItemRequest.SerializeToString,
+            inventory__pb2.Item.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RestockItem(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/legacy.inventory.v1.Inventory/RestockItem',
+            inventory__pb2.RestockItemRequest.SerializeToString,
+            inventory__pb2.Item.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListWarehouses(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/legacy.inventory.v1.Inventory/ListWarehouses',
+            inventory__pb2.ListWarehousesRequest.SerializeToString,
+            inventory__pb2.ListWarehousesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetWarehouse(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/legacy.inventory.v1.Inventory/GetWarehouse',
+            inventory__pb2.GetWarehouseRequest.SerializeToString,
+            inventory__pb2.GetWarehouseResponse.FromString,
             options,
             channel_credentials,
             insecure,

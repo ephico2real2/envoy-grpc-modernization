@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0finventory.proto\x12\x13legacy.inventory.v1\x1a\x1cgoogle/api/annotations.proto\"j\n\x04Item\x12\x0b\n\x03sku\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07on_hand\x18\x03 \x01(\x05\x12\x10\n\x08reserved\x18\x04 \x01(\x05\x12\x11\n\twarehouse\x18\x05 \x01(\t\x12\x11\n\tserved_by\x18\x06 \x01(\t\"\x1d\n\x0eGetItemRequest\x12\x0b\n\x03sku\x18\x01 \x01(\t\"8\n\x10ListItemsRequest\x12\x11\n\twarehouse\x18\x01 \x01(\t\x12\x11\n\tpage_size\x18\x02 \x01(\x05\"_\n\x11ListItemsResponse\x12(\n\x05items\x18\x01 \x03(\x0b\x32\x19.legacy.inventory.v1.Item\x12\r\n\x05total\x18\x02 \x01(\x05\x12\x11\n\tserved_by\x18\x03 \x01(\t\"F\n\x13ReserveStockRequest\x12\x0b\n\x03sku\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\x12\x10\n\x08order_id\x18\x03 \x01(\t\"e\n\x14ReserveStockResponse\x12\x0b\n\x03sku\x18\x01 \x01(\t\x12\x10\n\x08reserved\x18\x02 \x01(\x05\x12\n\n\x02ok\x18\x03 \x01(\x08\x12\x0f\n\x07message\x18\x04 \x01(\t\x12\x11\n\tserved_by\x18\x05 \x01(\t\"\x13\n\x11ResetStockRequest\"M\n\x12ResetStockResponse\x12\x13\n\x0bitems_reset\x18\x01 \x01(\x05\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x11\n\tserved_by\x18\x03 \x01(\t\"<\n\x11\x43reateItemRequest\x12\'\n\x04item\x18\x01 \x01(\x0b\x32\x19.legacy.inventory.v1.Item\" \n\x11\x44\x65leteItemRequest\x12\x0b\n\x03sku\x18\x01 \x01(\t\"V\n\x12\x44\x65leteItemResponse\x12\x0b\n\x03sku\x18\x01 \x01(\t\x12\x0f\n\x07\x64\x65leted\x18\x02 \x01(\x08\x12\x0f\n\x07message\x18\x03 \x01(\t\x12\x11\n\tserved_by\x18\x04 \x01(\t2\xc5\x05\n\tInventory\x12\x62\n\x07GetItem\x12#.legacy.inventory.v1.GetItemRequest\x1a\x19.legacy.inventory.v1.Item\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/items/{sku}\x12m\n\tListItems\x12%.legacy.inventory.v1.ListItemsRequest\x1a&.legacy.inventory.v1.ListItemsResponse\"\x11\x82\xd3\xe4\x93\x02\x0b\x12\t/v1/items\x12\x87\x01\n\x0cReserveStock\x12(.legacy.inventory.v1.ReserveStockRequest\x1a).legacy.inventory.v1.ReserveStockResponse\"\"\x82\xd3\xe4\x93\x02\x1c\"\x17/v1/items/{sku}:reserve:\x01*\x12y\n\nResetStock\x12&.legacy.inventory.v1.ResetStockRequest\x1a\'.legacy.inventory.v1.ResetStockResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\"\x0f/v1/items:reset:\x01*\x12h\n\nCreateItem\x12&.legacy.inventory.v1.CreateItemRequest\x1a\x19.legacy.inventory.v1.Item\"\x17\x82\xd3\xe4\x93\x02\x11\"\t/v1/items:\x04item\x12v\n\nDeleteItem\x12&.legacy.inventory.v1.DeleteItemRequest\x1a\'.legacy.inventory.v1.DeleteItemResponse\"\x17\x82\xd3\xe4\x93\x02\x11*\x0f/v1/items/{sku}b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0finventory.proto\x12\x13legacy.inventory.v1\x1a\x1cgoogle/api/annotations.proto\"j\n\x04Item\x12\x0b\n\x03sku\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07on_hand\x18\x03 \x01(\x05\x12\x10\n\x08reserved\x18\x04 \x01(\x05\x12\x11\n\twarehouse\x18\x05 \x01(\t\x12\x11\n\tserved_by\x18\x06 \x01(\t\"\x1d\n\x0eGetItemRequest\x12\x0b\n\x03sku\x18\x01 \x01(\t\"8\n\x10ListItemsRequest\x12\x11\n\twarehouse\x18\x01 \x01(\t\x12\x11\n\tpage_size\x18\x02 \x01(\x05\"_\n\x11ListItemsResponse\x12(\n\x05items\x18\x01 \x03(\x0b\x32\x19.legacy.inventory.v1.Item\x12\r\n\x05total\x18\x02 \x01(\x05\x12\x11\n\tserved_by\x18\x03 \x01(\t\"F\n\x13ReserveStockRequest\x12\x0b\n\x03sku\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\x12\x10\n\x08order_id\x18\x03 \x01(\t\"e\n\x14ReserveStockResponse\x12\x0b\n\x03sku\x18\x01 \x01(\t\x12\x10\n\x08reserved\x18\x02 \x01(\x05\x12\n\n\x02ok\x18\x03 \x01(\x08\x12\x0f\n\x07message\x18\x04 \x01(\t\x12\x11\n\tserved_by\x18\x05 \x01(\t\"\x13\n\x11ResetStockRequest\"M\n\x12ResetStockResponse\x12\x13\n\x0bitems_reset\x18\x01 \x01(\x05\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x11\n\tserved_by\x18\x03 \x01(\t\"\x8d\x01\n\x10WarehouseSummary\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x12\n\nitem_count\x18\x02 \x01(\x05\x12\x15\n\rtotal_on_hand\x18\x03 \x01(\x05\x12\x16\n\x0etotal_reserved\x18\x04 \x01(\x05\x12\x12\n\ntotal_free\x18\x05 \x01(\x05\x12\x14\n\x0cout_of_stock\x18\x06 \x01(\x05\"\x17\n\x15ListWarehousesRequest\"\x94\x01\n\x16ListWarehousesResponse\x12\x39\n\nwarehouses\x18\x01 \x03(\x0b\x32%.legacy.inventory.v1.WarehouseSummary\x12\x17\n\x0fwarehouse_count\x18\x02 \x01(\x05\x12\x13\n\x0btotal_items\x18\x03 \x01(\x05\x12\x11\n\tserved_by\x18\x04 \x01(\t\"#\n\x13GetWarehouseRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\"\x8b\x01\n\x14GetWarehouseResponse\x12\x36\n\x07summary\x18\x01 \x01(\x0b\x32%.legacy.inventory.v1.WarehouseSummary\x12(\n\x05items\x18\x02 \x03(\x0b\x32\x19.legacy.inventory.v1.Item\x12\x11\n\tserved_by\x18\x03 \x01(\t\"<\n\x11\x43reateItemRequest\x12\'\n\x04item\x18\x01 \x01(\x0b\x32\x19.legacy.inventory.v1.Item\"^\n\x11UpdateItemRequest\x12\x0b\n\x03sku\x18\x01 \x01(\t\x12\'\n\x04item\x18\x02 \x01(\x0b\x32\x19.legacy.inventory.v1.Item\x12\x13\n\x0bupdate_mask\x18\x03 \x01(\t\"A\n\x12RestockItemRequest\x12\x0b\n\x03sku\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\x12\x0c\n\x04note\x18\x03 \x01(\t\" \n\x11\x44\x65leteItemRequest\x12\x0b\n\x03sku\x18\x01 \x01(\t\"V\n\x12\x44\x65leteItemResponse\x12\x0b\n\x03sku\x18\x01 \x01(\t\x12\x0f\n\x07\x64\x65leted\x18\x02 \x01(\x08\x12\x0f\n\x07message\x18\x03 \x01(\t\x12\x11\n\tserved_by\x18\x04 \x01(\t2\xb5\t\n\tInventory\x12\x62\n\x07GetItem\x12#.legacy.inventory.v1.GetItemRequest\x1a\x19.legacy.inventory.v1.Item\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/items/{sku}\x12m\n\tListItems\x12%.legacy.inventory.v1.ListItemsRequest\x1a&.legacy.inventory.v1.ListItemsResponse\"\x11\x82\xd3\xe4\x93\x02\x0b\x12\t/v1/items\x12\x87\x01\n\x0cReserveStock\x12(.legacy.inventory.v1.ReserveStockRequest\x1a).legacy.inventory.v1.ReserveStockResponse\"\"\x82\xd3\xe4\x93\x02\x1c\"\x17/v1/items/{sku}:reserve:\x01*\x12y\n\nResetStock\x12&.legacy.inventory.v1.ResetStockRequest\x1a\'.legacy.inventory.v1.ResetStockResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\"\x0f/v1/items:reset:\x01*\x12h\n\nCreateItem\x12&.legacy.inventory.v1.CreateItemRequest\x1a\x19.legacy.inventory.v1.Item\"\x17\x82\xd3\xe4\x93\x02\x11\"\t/v1/items:\x04item\x12v\n\nDeleteItem\x12&.legacy.inventory.v1.DeleteItemRequest\x1a\'.legacy.inventory.v1.DeleteItemResponse\"\x17\x82\xd3\xe4\x93\x02\x11*\x0f/v1/items/{sku}\x12n\n\nUpdateItem\x12&.legacy.inventory.v1.UpdateItemRequest\x1a\x19.legacy.inventory.v1.Item\"\x1d\x82\xd3\xe4\x93\x02\x17\x32\x0f/v1/items/{sku}:\x04item\x12u\n\x0bRestockItem\x12\'.legacy.inventory.v1.RestockItemRequest\x1a\x19.legacy.inventory.v1.Item\"\"\x82\xd3\xe4\x93\x02\x1c\"\x17/v1/items/{sku}:restock:\x01*\x12\x81\x01\n\x0eListWarehouses\x12*.legacy.inventory.v1.ListWarehousesRequest\x1a+.legacy.inventory.v1.ListWarehousesResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/v1/warehouses\x12\x82\x01\n\x0cGetWarehouse\x12(.legacy.inventory.v1.GetWarehouseRequest\x1a).legacy.inventory.v1.GetWarehouseResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/warehouses/{name}b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -44,6 +44,14 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_INVENTORY'].methods_by_name['CreateItem']._serialized_options = b'\202\323\344\223\002\021\"\t/v1/items:\004item'
   _globals['_INVENTORY'].methods_by_name['DeleteItem']._loaded_options = None
   _globals['_INVENTORY'].methods_by_name['DeleteItem']._serialized_options = b'\202\323\344\223\002\021*\017/v1/items/{sku}'
+  _globals['_INVENTORY'].methods_by_name['UpdateItem']._loaded_options = None
+  _globals['_INVENTORY'].methods_by_name['UpdateItem']._serialized_options = b'\202\323\344\223\002\0272\017/v1/items/{sku}:\004item'
+  _globals['_INVENTORY'].methods_by_name['RestockItem']._loaded_options = None
+  _globals['_INVENTORY'].methods_by_name['RestockItem']._serialized_options = b'\202\323\344\223\002\034\"\027/v1/items/{sku}:restock:\001*'
+  _globals['_INVENTORY'].methods_by_name['ListWarehouses']._loaded_options = None
+  _globals['_INVENTORY'].methods_by_name['ListWarehouses']._serialized_options = b'\202\323\344\223\002\020\022\016/v1/warehouses'
+  _globals['_INVENTORY'].methods_by_name['GetWarehouse']._loaded_options = None
+  _globals['_INVENTORY'].methods_by_name['GetWarehouse']._serialized_options = b'\202\323\344\223\002\027\022\025/v1/warehouses/{name}'
   _globals['_ITEM']._serialized_start=70
   _globals['_ITEM']._serialized_end=176
   _globals['_GETITEMREQUEST']._serialized_start=178
@@ -60,12 +68,26 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_RESETSTOCKREQUEST']._serialized_end=558
   _globals['_RESETSTOCKRESPONSE']._serialized_start=560
   _globals['_RESETSTOCKRESPONSE']._serialized_end=637
-  _globals['_CREATEITEMREQUEST']._serialized_start=639
-  _globals['_CREATEITEMREQUEST']._serialized_end=699
-  _globals['_DELETEITEMREQUEST']._serialized_start=701
-  _globals['_DELETEITEMREQUEST']._serialized_end=733
-  _globals['_DELETEITEMRESPONSE']._serialized_start=735
-  _globals['_DELETEITEMRESPONSE']._serialized_end=821
-  _globals['_INVENTORY']._serialized_start=824
-  _globals['_INVENTORY']._serialized_end=1533
+  _globals['_WAREHOUSESUMMARY']._serialized_start=640
+  _globals['_WAREHOUSESUMMARY']._serialized_end=781
+  _globals['_LISTWAREHOUSESREQUEST']._serialized_start=783
+  _globals['_LISTWAREHOUSESREQUEST']._serialized_end=806
+  _globals['_LISTWAREHOUSESRESPONSE']._serialized_start=809
+  _globals['_LISTWAREHOUSESRESPONSE']._serialized_end=957
+  _globals['_GETWAREHOUSEREQUEST']._serialized_start=959
+  _globals['_GETWAREHOUSEREQUEST']._serialized_end=994
+  _globals['_GETWAREHOUSERESPONSE']._serialized_start=997
+  _globals['_GETWAREHOUSERESPONSE']._serialized_end=1136
+  _globals['_CREATEITEMREQUEST']._serialized_start=1138
+  _globals['_CREATEITEMREQUEST']._serialized_end=1198
+  _globals['_UPDATEITEMREQUEST']._serialized_start=1200
+  _globals['_UPDATEITEMREQUEST']._serialized_end=1294
+  _globals['_RESTOCKITEMREQUEST']._serialized_start=1296
+  _globals['_RESTOCKITEMREQUEST']._serialized_end=1361
+  _globals['_DELETEITEMREQUEST']._serialized_start=1363
+  _globals['_DELETEITEMREQUEST']._serialized_end=1395
+  _globals['_DELETEITEMRESPONSE']._serialized_start=1397
+  _globals['_DELETEITEMRESPONSE']._serialized_end=1483
+  _globals['_INVENTORY']._serialized_start=1486
+  _globals['_INVENTORY']._serialized_end=2691
 # @@protoc_insertion_point(module_scope)

@@ -95,6 +95,19 @@ test_all() {
     -H 'Content-Type: application/json' -d "{\"sku\":\"$SKU\",\"name\":\"dup\",\"onHand\":1}"
   echo "== DELETE /v1/items/$SKU =="
   curl -sk -X DELETE "https://$H/v1/items/$SKU"
+  echo; echo "== restocking an out-of-stock item (CreateItem would 409) =="
+  curl -sk -o /dev/null -w "  POST /v1/items (existing sku) -> HTTP %{http_code}\n" \
+    -X POST "https://$H/v1/items" -H 'Content-Type: application/json' \
+    -d '{"sku":"SKU-1005","name":"dup","onHand":10}'
+  curl -sk -X POST "https://$H/v1/items/SKU-1005:restock" \
+    -H 'Content-Type: application/json' -d '{"quantity":25,"note":"demo"}'
+  echo; echo "== PATCH updates a field; the mask is a QUERY parameter, not body =="
+  curl -sk -X PATCH "https://$H/v1/items/SKU-1005?updateMask=on_hand" \
+    -H 'Content-Type: application/json' -d '{"onHand":0}'
+  echo; echo "== warehouses =="
+  curl -sk "https://$H/v1/warehouses" | grep -E '"name"|warehouseCount|totalItems'
+  echo "== one warehouse =="
+  curl -sk "https://$H/v1/warehouses/CHICAGO" | head -12
   echo; echo "== gRPC NOT_FOUND becomes HTTP 404 =="
   curl -sk -o /dev/null -w "HTTP %{http_code}\n" "https://$H/v1/items/NOPE"
   echo; echo "== Envoy spreads calls over the inventory replicas =="
@@ -104,7 +117,7 @@ test_all() {
     | grep -o '"servedBy": "[^"]*"' | sort | uniq -c
   echo "== what the backend saw - gRPC methods only =="
   oc logs -n "$NS" -l app=inventory --tail=8 --prefix \
-    | grep -Eo '(GetItem|ListItems|ReserveStock|ResetStock|CreateItem|DeleteItem)' | sort | uniq -c
+    | grep -Eo '(GetItem|ListItems|ReserveStock|ResetStock|CreateItem|DeleteItem|UpdateItem|RestockItem|ListWarehouses|GetWarehouse)' | sort | uniq -c
 }
 
 load() {

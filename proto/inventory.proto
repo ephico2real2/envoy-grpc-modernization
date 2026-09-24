@@ -31,6 +31,30 @@ service Inventory {
   rpc DeleteItem (DeleteItemRequest) returns (DeleteItemResponse) {
     option (google.api.http) = { delete: "/v1/items/{sku}" };
   }
+
+  // CreateItem deliberately refuses an existing sku, so changing one needs its
+  // own verb. PATCH is the REST idiom for a PARTIAL update: fields left out of
+  // the body are left alone, which is why the request carries a field_mask.
+  rpc UpdateItem (UpdateItemRequest) returns (Item) {
+    option (google.api.http) = { patch: "/v1/items/{sku}" body: "item" };
+  }
+
+  // Restocking is the common case and deserves a verb of its own: it ADDS to
+  // on_hand rather than replacing it, so two concurrent deliveries cannot
+  // overwrite each other the way two PATCHes would.
+  rpc RestockItem (RestockItemRequest) returns (Item) {
+    option (google.api.http) = { post: "/v1/items/{sku}:restock" body: "*" };
+  }
+
+  // Warehouses are their own collection, not a filter on items. The summary is
+  // computed by the database with an aggregation rather than by counting rows
+  // in the service, so it stays correct as the catalogue grows.
+  rpc ListWarehouses (ListWarehousesRequest) returns (ListWarehousesResponse) {
+    option (google.api.http) = { get: "/v1/warehouses" };
+  }
+  rpc GetWarehouse (GetWarehouseRequest) returns (GetWarehouseResponse) {
+    option (google.api.http) = { get: "/v1/warehouses/{name}" };
+  }
 }
 
 message Item {
@@ -54,6 +78,52 @@ message ResetStockRequest    {}
 message ResetStockResponse   { int32 items_reset = 1; string message = 2; string served_by = 3; }
 // body: "item" binds the JSON body to this one field, so the wire format is the
 // bare item object rather than {"item": {...}}.
+// One row of the warehouse summary. Totals are sums across that warehouse's
+// items; free is on_hand minus reserved, the number that can still be sold.
+message WarehouseSummary {
+  string name            = 1;
+  int32  item_count      = 2;   // distinct SKUs held here
+  int32  total_on_hand   = 3;
+  int32  total_reserved  = 4;
+  int32  total_free      = 5;
+  int32  out_of_stock    = 6;   // SKUs with nothing free
+}
+
+message ListWarehousesRequest  {}
+message ListWarehousesResponse {
+  repeated WarehouseSummary warehouses = 1;
+  int32  warehouse_count = 2;
+  int32  total_items     = 3;
+  string served_by       = 4;
+}
+
+// {name} in the path, so a warehouse with a space in it arrives percent-encoded
+// as e.g. /v1/warehouses/LOS%20ANGELES.
+message GetWarehouseRequest  { string name = 1; }
+message GetWarehouseResponse {
+  WarehouseSummary summary = 1;
+  repeated Item    items   = 2;
+  string           served_by = 3;
+}
+
 message CreateItemRequest    { Item item = 1; }
+
+// update_mask names the fields to change, e.g. "on_hand" or "name,warehouse".
+// Left empty, every non-empty field of `item` is applied - convenient for a
+// form that always sends the whole object, which is what the kiosk does.
+//
+// IMPORTANT: because the binding is body: "item", the JSON body maps to the
+// `item` field ALONE. update_mask is NOT read from the body - it must be a
+// query parameter:
+//     PATCH /v1/items/SKU-1005?updateMask=on_hand   {"onHand": 0}
+// Sent in the body it is silently ignored, and since proto3 cannot tell an
+// unset int32 from 0, the update would appear to do nothing.
+message UpdateItemRequest {
+  string sku         = 1;
+  Item   item        = 2;
+  string update_mask = 3;
+}
+
+message RestockItemRequest { string sku = 1; int32 quantity = 2; string note = 3; }
 message DeleteItemRequest    { string sku = 1; }
 message DeleteItemResponse   { string sku = 1; bool deleted = 2; string message = 3; string served_by = 4; }

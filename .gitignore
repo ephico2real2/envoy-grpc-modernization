@@ -5,3 +5,6 @@ __pycache__/
 # Only the top-level scratch directory - the labs commit their measured
 # results as evidence, and a bare "results/" would silently swallow those too.
 /results/
+
+# Local-only working plan, not part of the published repo
+PLAN.md

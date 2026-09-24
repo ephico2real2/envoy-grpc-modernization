@@ -41,6 +41,12 @@
     font-weight:400;padding:1px 8px;border-radius:5px;line-height:1.4}
   button.del:hover{color:var(--bad);border-color:var(--bad)}
   table td:last-child{text-align:right;width:1%}
+  .wh-table td:last-child{text-align:right;width:auto}
+  .wh-table th:not(:first-child), .wh-table td:not(:first-child){text-align:right}
+  .wh-table tbody tr{cursor:pointer}
+  .wh-table tbody tr:hover{background:rgba(127,127,127,.09)}
+  .wh-table tbody tr.on{background:rgba(127,127,127,.16)}
+  .wh-name{font-family:var(--mono,ui-monospace,monospace);letter-spacing:.02em}
   input,select{font:inherit;background:#0b1118;color:var(--ink);border:1px solid var(--line);
                border-radius:7px;padding:8px 10px;width:100%}
   label{display:block;font-size:12px;color:var(--dim);margin:0 0 4px}
@@ -76,7 +82,14 @@
 
   <div class="grid">
     <div class="card">
-      <h2>Stock on hand</h2>
+      <h2 style="margin-top:0">Warehouses</h2>
+      <table class="wh-table">
+        <thead><tr><th>Warehouse</th><th>SKUs</th><th>On hand</th><th>Reserved</th><th>Free</th><th>Out</th></tr></thead>
+        <tbody id="whrows"><tr><td colspan="6" class="sub">loading…</td></tr></tbody>
+      </table>
+      <div class="note sub" id="whfoot" style="margin-top:8px">&nbsp;</div>
+
+      <h2 style="margin-top:22px">Stock on hand</h2>
       <div class="row" style="grid-template-columns:1fr auto;margin-bottom:14px">
         <div>
           <label for="wh">Warehouse</label>
@@ -128,6 +141,23 @@
       <div class="note sub" style="margin-top:6px;font-size:12.5px">
         writes straight through to MongoDB &mdash; POST <code>/v1/items</code> becomes
         <code>rpc CreateItem</code>
+      </div>
+
+      <h2 style="margin-top:22px">Restock</h2>
+      <div class="row">
+        <div>
+          <label for="rsku">SKU</label>
+          <input id="rsku" placeholder="SKU-1005" value="SKU-1005">
+        </div>
+        <div>
+          <label for="rqty">Add to on hand</label>
+          <input id="rqty" type="number" min="1" value="50">
+        </div>
+        <button id="restock">Restock</button>
+      </div>
+      <div class="note sub" style="margin-top:6px;font-size:12.5px">
+        adds to <code>onHand</code> &mdash; the way to bring an out-of-stock item back.
+        POST <code>/v1/items/{sku}:restock</code> becomes <code>rpc RestockItem</code>
       </div>
 
       <h2 style="margin-top:22px">Reserve stock</h2>
@@ -229,6 +259,44 @@ function freeCell(it) {
   return '<span class="free ' + cls + '">' + free + " of " + (it.onHand || 0) + "</span>";
 }
 
+async function loadWarehouses(quiet) {
+  try {
+    // GET /v1/warehouses  ->  rpc ListWarehouses
+    const d = await call("GET", "/v1/warehouses", null, quiet);
+    const rows = (d && d.warehouses) || [];
+    const sel = $("wh").value;
+    $("whrows").innerHTML = rows.length
+      ? rows.map(w =>
+          "<tr data-wh='" + esc(w.name) + "'" + (w.name === sel ? " class='on'" : "") +
+          "><td class='wh-name'>" + esc(w.name) + "</td><td>" + (w.itemCount || 0) +
+          "</td><td>" + (w.totalOnHand || 0) + "</td><td>" + (w.totalReserved || 0) +
+          "</td><td>" + freeSpan(w.totalFree || 0) + "</td><td>" +
+          outSpan(w.outOfStock || 0) + "</td></tr>").join("")
+      : "<tr><td colspan='6' class='sub'>no warehouses</td></tr>";
+    $("whfoot").innerHTML = "<strong>" + (d.warehouseCount || 0) + "</strong> warehouses &middot; " +
+      "<strong>" + (d.totalItems || 0) + "</strong> SKUs &middot; summed by MongoDB, served by <code>" +
+      esc(d.servedBy) + "</code> &middot; click a row to filter below";
+    // Clicking a row drives the same filter the dropdown does, so the two
+    // controls can never disagree about what is being shown.
+    document.querySelectorAll("#whrows tr[data-wh]").forEach(tr => {
+      tr.onclick = () => {
+        $("wh").value = ($("wh").value === tr.dataset.wh) ? "" : tr.dataset.wh;
+        load(); loadWarehouses(true);
+      };
+    });
+  } catch (e) {
+    $("whrows").innerHTML = "<tr><td colspan='6' class='sub'>could not reach the API</td></tr>";
+    $("whfoot").innerHTML = "&nbsp;";
+  }
+}
+
+function freeSpan(n) {
+  return "<span class='free " + (n === 0 ? "out" : n < 20 ? "low" : "good") + "'>" + n + "</span>";
+}
+function outSpan(n) {
+  return n ? "<span class='free out'>" + n + "</span>" : "<span class='sub'>0</span>";
+}
+
 async function load(quiet) {
   const wh = $("wh").value;
   const q = wh ? "?warehouse=" + encodeURIComponent(wh) : "";
@@ -272,14 +340,59 @@ async function add() {
     $("flash").className = "note flash";
     $("flash").textContent = "added " + out.sku + " (written by " + (out.servedBy || "?") + ")";
     $("nsku").value = ""; $("nname").value = "";
-    await load(true);
+    await load(true); await loadWarehouses(true);
   } catch (e) {
-    $("flash").className = "note flasherr";
-    // 409 is a duplicate sku: gRPC ALREADY_EXISTS, mapped by convert_grpc_status.
-    $("flash").textContent = e.status === 409
-      ? "that SKU already exists" : "could not add - see the wire panel";
+    if (e.status === 409) {
+      // ALREADY_EXISTS. CreateItem is right to refuse; changing an existing
+      // item is UpdateItem's job, so offer that rather than dead-ending.
+      $("flash").className = "note flasherr";
+      $("flash").innerHTML = esc(sku) + " already exists &mdash; " +
+        "<a href='#' id='doupd'>update it instead</a>";
+      $("doupd").onclick = (ev) => { ev.preventDefault(); update(sku, name, qty); };
+    } else {
+      $("flash").className = "note flasherr";
+      $("flash").textContent = "could not add - see the wire panel";
+    }
   } finally {
     $("add").disabled = false;
+  }
+}
+
+async function update(sku, name, qty) {
+  try {
+    // PATCH /v1/items/{sku}  ->  rpc UpdateItem.
+    // updateMask goes in the QUERY STRING, not the body. The binding is
+    // body: "item", so the body maps to the `item` field ALONE - a mask sent
+    // in the body is silently dropped and a zero would look like "not set".
+    const out = await call("PATCH",
+      "/v1/items/" + encodeURIComponent(sku) + "?updateMask=name,on_hand,warehouse",
+      { name: name, onHand: isNaN(qty) ? 0 : qty, warehouse: $("nwh").value });
+    $("flash").className = "note flash";
+    $("flash").textContent = "updated " + out.sku + " (by " + (out.servedBy || "?") + ")";
+    $("nsku").value = ""; $("nname").value = "";
+    await load(true); await loadWarehouses(true);
+  } catch (e) {
+    $("flash").className = "note flasherr";
+    $("flash").textContent = "could not update " + sku + " - see the wire panel";
+  }
+}
+
+async function restock() {
+  const sku = $("rsku").value.trim();
+  const qty = parseInt($("rqty").value, 10) || 0;
+  $("restock").disabled = true;
+  try {
+    // POST /v1/items/{sku}:restock  ->  rpc RestockItem
+    const out = await call("POST", "/v1/items/" + encodeURIComponent(sku) + ":restock",
+                           { quantity: qty, note: "KIOSK-" + Date.now() });
+    $("flash").className = "note flash";
+    $("flash").textContent = "restocked " + out.sku + " to " + out.onHand + " on hand";
+    await load(true); await loadWarehouses(true);
+  } catch (e) {
+    $("flash").className = "note flasherr";
+    $("flash").textContent = "could not restock " + sku + " - see the wire panel";
+  } finally {
+    $("restock").disabled = false;
   }
 }
 
@@ -289,7 +402,7 @@ async function del(sku) {
     const out = await call("DELETE", "/v1/items/" + encodeURIComponent(sku));
     $("flash").className = "note flash";
     $("flash").textContent = (out && out.message) || ("deleted " + sku);
-    await load(true);
+    await load(true); await loadWarehouses(true);
   } catch (e) {
     $("flash").className = "note flasherr";
     $("flash").textContent = "could not delete " + sku + " - see the wire panel";
@@ -307,7 +420,7 @@ async function reserve() {
                            { quantity: qty, orderId: "KIOSK-" + Date.now() });
     $("flash").className = "note " + (out && out.ok ? "flash" : "flasherr");
     $("flash").textContent = (out && out.message) || "done";
-    await load(true);
+    await load(true); await loadWarehouses(true);
   } catch (e) {
     $("flash").className = "note flasherr";
     $("flash").textContent = "reservation failed - see the wire panel";
@@ -323,7 +436,7 @@ async function reset() {
     const out = await call("POST", "/v1/items:reset", {});
     $("flash").className = "note flash";
     $("flash").textContent = (out && out.message) || "reset";
-    await load(true);
+    await load(true); await loadWarehouses(true);
   } catch (e) {
     $("flash").className = "note flasherr";
     $("flash").textContent = "reset failed - see the wire panel";
@@ -332,12 +445,14 @@ async function reset() {
   }
 }
 
-$("refresh").onclick = load;
+$("refresh").onclick = () => { load(); loadWarehouses(true); };
 $("add").onclick = add;
+$("restock").onclick = restock;
 $("reset").onclick = reset;
-$("wh").onchange = load;
+$("wh").onchange = () => { load(); loadWarehouses(true); };
 $("reserve").onclick = reserve;
 load();
+loadWarehouses();
 </script>
 </body>
 </html>

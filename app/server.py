@@ -190,6 +190,55 @@ class Inventory(rpc.InventoryServicer):
             items_reset=res.modified_count, served_by=POD,
             message="cleared reservations on %d item(s)" % res.modified_count)
 
+    # The $group stage does the arithmetic in the database. Doing it here would
+    # mean pulling every document over the wire to add up six numbers, which
+    # stops being acceptable the moment the catalogue is real.
+    _SUMMARY_PIPELINE = [
+        {"$group": {
+            "_id": "$warehouse",
+            "item_count":     {"$sum": 1},
+            "total_on_hand":  {"$sum": "$on_hand"},
+            "total_reserved": {"$sum": "$reserved"},
+            # $cond counts a SKU as out of stock when nothing is free, which is
+            # not the same as on_hand being zero - stock can be fully reserved.
+            "out_of_stock":   {"$sum": {"$cond": [
+                {"$lte": [{"$subtract": ["$on_hand", "$reserved"]}, 0]}, 1, 0]}},
+        }},
+        {"$sort": {"_id": 1}},
+    ]
+
+    def _summaries(self, match=None):
+        pipeline = ([{"$match": match}] if match else []) + self._SUMMARY_PIPELINE
+        out = []
+        for d in self.items.aggregate(pipeline):
+            out.append(pb.WarehouseSummary(
+                name=d["_id"],
+                item_count=d["item_count"],
+                total_on_hand=d["total_on_hand"],
+                total_reserved=d["total_reserved"],
+                total_free=d["total_on_hand"] - d["total_reserved"],
+                out_of_stock=d["out_of_stock"]))
+        return out
+
+    def ListWarehouses(self, request, context):
+        log.info("ListWarehouses")
+        rows = self._summaries()
+        return pb.ListWarehousesResponse(
+            warehouses=rows,
+            warehouse_count=len(rows),
+            total_items=sum(r.item_count for r in rows),
+            served_by=POD)
+
+    def GetWarehouse(self, request, context):
+        log.info("GetWarehouse name=%s", request.name)
+        rows = self._summaries({"warehouse": request.name})
+        if not rows:
+            context.abort(grpc.StatusCode.NOT_FOUND,
+                          "no such warehouse: %s" % request.name)
+        cur = self.items.find({"warehouse": request.name}).sort("sku", 1)
+        return pb.GetWarehouseResponse(
+            summary=rows[0], items=[to_item(d) for d in cur], served_by=POD)
+
     def CreateItem(self, request, context):
         it = request.item
         log.info("CreateItem sku=%s", it.sku)
@@ -206,6 +255,60 @@ class Inventory(rpc.InventoryServicer):
         except DuplicateKeyError:
             # ALREADY_EXISTS is what the transcoder turns into HTTP 409.
             context.abort(grpc.StatusCode.ALREADY_EXISTS, "sku already exists: %s" % it.sku)
+        return to_item(doc)
+
+    def UpdateItem(self, request, context):
+        log.info("UpdateItem sku=%s mask=%r", request.sku, request.update_mask)
+        it = request.item
+        # An explicit mask wins. Without one, apply the fields that were
+        # actually set - proto3 cannot distinguish "absent" from "zero" for
+        # scalars, so an unset on_hand and an on_hand of 0 look identical. The
+        # mask is how a caller says "yes, really set it to zero".
+        if request.update_mask:
+            fields = [f.strip() for f in request.update_mask.split(",") if f.strip()]
+        else:
+            fields = [f for f in ("name", "on_hand", "warehouse")
+                      if getattr(it, f) not in ("", 0)]
+        allowed = {"name", "on_hand", "warehouse"}
+        bad = [f for f in fields if f not in allowed]
+        if bad:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT,
+                          "cannot update %s; allowed: %s"
+                          % (", ".join(bad), ", ".join(sorted(allowed))))
+        if not fields:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "nothing to update")
+
+        update = {f: getattr(it, f) for f in fields}
+        if "on_hand" in update and update["on_hand"] < 0:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "onHand cannot be negative")
+
+        # Refuse to strand reservations: on_hand must still cover what is
+        # already reserved, or the free count would go negative.
+        if "on_hand" in update:
+            cur = self.items.find_one({"sku": request.sku})
+            if cur and update["on_hand"] < cur["reserved"]:
+                context.abort(grpc.StatusCode.FAILED_PRECONDITION,
+                              "onHand %d is below the %d already reserved"
+                              % (update["on_hand"], cur["reserved"]))
+
+        doc = self.items.find_one_and_update(
+            {"sku": request.sku}, {"$set": update},
+            return_document=ReturnDocument.AFTER)
+        if not doc:
+            context.abort(grpc.StatusCode.NOT_FOUND, "no such sku: %s" % request.sku)
+        return to_item(doc)
+
+    def RestockItem(self, request, context):
+        log.info("RestockItem sku=%s qty=%d note=%s",
+                 request.sku, request.quantity, request.note)
+        if request.quantity <= 0:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "quantity must be positive")
+        # $inc, not $set: two deliveries landing at once both count.
+        doc = self.items.find_one_and_update(
+            {"sku": request.sku}, {"$inc": {"on_hand": request.quantity}},
+            return_document=ReturnDocument.AFTER)
+        if not doc:
+            context.abort(grpc.StatusCode.NOT_FOUND, "no such sku: %s" % request.sku)
         return to_item(doc)
 
     def DeleteItem(self, request, context):
