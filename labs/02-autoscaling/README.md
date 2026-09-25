@@ -323,9 +323,15 @@ Fourteen pods in the namespace: 2 Envoy, **10 inventory**, 1 MongoDB, 1 kiosk.
 ### The alert that goes with it
 
 `InventoryAtMaxReplicas` from `manifests/60-alerts.yaml` fired on its own during
-this run — the autoscaler had genuinely been at its ceiling for ten minutes:
+this run. Timeline, from the cluster:
 
-![InventoryAtMaxReplicas firing](../../docs/lab02/alert-firing.jpg)
+```text
+01:46:20Z   HPA scales to 10, its maxReplicaCount
+01:47:42Z   alert becomes PENDING (activeAt)
+01:58:06Z   alert becomes FIRING     <- for: 10m elapsed
+```
+
+![InventoryAtMaxReplicas firing](../../docs/lab02/alert-firing.png)
 
 That is the point of the rule. Being pinned at `maxReplicaCount` is not a fault
 to page someone about at 3am — it is the signal that the ceiling, not the
