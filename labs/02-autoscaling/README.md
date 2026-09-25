@@ -246,6 +246,46 @@ needs only `cluster-monitoring-view` — simpler, but it can read every namespac
 
 ## Measured
 
+### The whole scale-out in one graph
+
+Load applied to an idle namespace sitting at its floor of 3 replicas:
+
+![traffic spike, scale-out, and convergence](../../docs/lab02/load-scaleout.png)
+
+Read it left to right. Flat while idle. The spike at 20:46 is load arriving —
+`rate(inventory_rpc_total[1m])` per pod climbs to about **350 rps on the
+replicas that were already up**, because they are carrying everything. Then the
+autoscaler adds pods and the single tall line splits into ten, all falling and
+converging as the work spreads.
+
+Steady state, read off the same panel:
+
+```text
+inventory-6df77d74ff-n5wdz   111.2      inventory-6df77d74ff-c6mch   111.1
+inventory-6df77d74ff-sq9zc   111.0      inventory-6df77d74ff-w7fxs   111.0
+inventory-6df77d74ff-jw24q   110.7      inventory-6df77d74ff-v4zpn   110.2
+inventory-6df77d74ff-nnhpg   109.7      inventory-6df77d74ff-hgrr6   106.1
+inventory-6df77d74ff-6scsz   105.8      inventory-6df77d74ff-9f5xd   ~110
+```
+
+Queried directly at the same moment, the split was tighter still — **1,189 rps
+total across ten pods, every one between 118.6 and 119.4**, a spread of 0.67 %:
+
+```console
+$ curl ... 'query=sort_desc(sum by (pod) (rate(inventory_rpc_total[1m])))'
+  inventory-6df77d74ff-nnhpg   119.4 rps
+  inventory-6df77d74ff-n5wdz   119.2 rps
+  ...
+  inventory-6df77d74ff-v4zpn   118.6 rps
+  TOTAL                       1189.0 rps
+```
+
+The two differ because the graph samples a `[2m]` window that still contains the
+ramp, while the point query uses `[1m]` of settled traffic. Worth knowing which
+you are reading before quoting a number.
+
+### The autoscaler's own view
+
 Load: 24 workers against the kiosk Route.
 
 ```text
