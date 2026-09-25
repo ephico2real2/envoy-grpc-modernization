@@ -126,8 +126,15 @@ The diagram source is `docs/diagrams/modernize-architecture/source.html`.
 Re-render with:
 
 ```bash
-python3 ~/.claude/skills/visual/render.py   docs/diagrams/modernize-architecture/source.html   docs/diagrams/modernize-architecture layers,request,headless
+# needs Playwright's Chromium:
+#   python3 -m pip install playwright && python3 -m playwright install chromium
+python3 docs/diagrams/render.py \
+  docs/diagrams/modernize-architecture/source.html \
+  docs/diagrams/modernize-architecture layers,request,headless
 ```
+
+`render.py` renders every `.fig-scroll` in the page to a light and a dark PNG
+at 2x, reports page errors, and fails if the page scrolls sideways at 375 px.
 
 ## Run it
 
