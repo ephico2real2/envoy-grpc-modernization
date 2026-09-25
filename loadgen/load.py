@@ -21,14 +21,23 @@ SKUS = ["SKU-1001", "SKU-1002", "SKU-1003", "SKU-1004", "SKU-1005",
         "SKU-4001", "SKU-4002", "SKU-5001", "SKU-5002"]
 WAREHOUSES = ["LEEDS", "DERBY", "LOS ANGELES", "CHICAGO", "NEW YORK", "HOUSTON"]
 
-# The read mix a kiosk actually produces: mostly listing and looking up.
+# The read mix a kiosk actually produces. Read-only on purpose: the run should
+# be repeatable and leave the catalogue exactly as it found it.
+#
+# Note quote() rather than plain concatenation - "LOS ANGELES" must arrive as
+# %20. The transcoder does NOT read "+" as a space (RFC 3986), so a "+" here
+# would match nothing and quietly skew the results.
 def pick(rng):
     r = rng.random()
-    if r < 0.45:
+    if r < 0.35:
         return "GET", "/v1/items", None
-    if r < 0.80:
+    if r < 0.65:
         return "GET", "/v1/items/" + rng.choice(SKUS), None
-    return "GET", "/v1/items?warehouse=" + urllib.parse.quote(rng.choice(WAREHOUSES)), None
+    if r < 0.80:
+        return "GET", "/v1/items?warehouse=" + urllib.parse.quote(rng.choice(WAREHOUSES)), None
+    if r < 0.92:
+        return "GET", "/v1/warehouses", None
+    return "GET", "/v1/warehouses/" + urllib.parse.quote(rng.choice(WAREHOUSES)), None
 
 
 

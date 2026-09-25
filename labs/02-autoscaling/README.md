@@ -87,6 +87,143 @@ oc get secret thanos-querier-kube-rbac-proxy -n openshift-monitoring \
 So the grant is `get pods` **in the `metrics.k8s.io` API group**. Reading that
 secret is faster than any amount of trial and error.
 
+### The two grants, in full
+
+Both live in `30-scaledobject.yaml`; reproduced here so they can be copied
+without opening the file.
+
+**Grant 1 — let the KEDA operator mint the token.** `boundServiceAccountToken`
+means the *operator* creates the token, in *your* namespace, so the operator's
+ServiceAccount needs the permission. `resourceNames` keeps it to the one
+ServiceAccount rather than every account in the namespace.
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: keda-token-minter
+  namespace: modernize-demo
+rules:
+- apiGroups: [""]
+  resources: ["serviceaccounts/token"]
+  resourceNames: ["keda-metrics-reader"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: keda-token-minter
+  namespace: modernize-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: keda-token-minter
+subjects:
+- kind: ServiceAccount
+  name: keda-operator            # the OPERATOR, not the scaler's account
+  namespace: openshift-keda
+```
+
+**Grant 2 — let the scaler through the Thanos tenancy port.** Note the API
+group: `metrics.k8s.io`, not `""`.
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: keda-tenancy-read
+  namespace: modernize-demo
+rules:
+- apiGroups: ["metrics.k8s.io"]   # NOT the core group - this is the whole trick
+  resources: ["pods"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: keda-tenancy-read
+  namespace: modernize-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: keda-tenancy-read
+subjects:
+- kind: ServiceAccount
+  name: keda-metrics-reader      # the account the scaler authenticates AS
+  namespace: modernize-demo
+```
+
+### The commands
+
+```bash
+# the ServiceAccount the scaler authenticates as
+oc create sa keda-metrics-reader -n modernize-demo
+
+# both Roles and RoleBindings (they ship inside this file)
+oc apply -f labs/02-autoscaling/30-scaledobject.yaml
+```
+
+`cluster-monitoring-view` is **not** required once Grant 2 is in place — the
+tenancy port checks `metrics.k8s.io/pods`, nothing else. If you prefer the
+cluster-wide Thanos port (9091) instead of the tenancy port (9092), you need the
+opposite: `cluster-monitoring-view` and no `metrics.k8s.io` grant.
+
+```bash
+# only if you switch serverAddress to port 9091
+oc adm policy add-cluster-role-to-user cluster-monitoring-view \
+  -z keda-metrics-reader -n modernize-demo
+```
+
+### Check the grants took, before blaming KEDA
+
+```bash
+SA=system:serviceaccount:modernize-demo:keda-metrics-reader
+OP=system:serviceaccount:openshift-keda:keda-operator
+
+# Grant 2 - note the API group on the resource
+oc auth can-i get pods.metrics.k8s.io -n modernize-demo --as="$SA"      # yes
+oc auth can-i get pods                -n modernize-demo --as="$SA"      # no, and that is correct
+
+# Grant 1 - the resource MUST be named, see below
+oc auth can-i create serviceaccounts/keda-metrics-reader \
+  --subresource=token -n modernize-demo --as="$OP"                      # yes
+```
+
+**A `can-i` that says "no" here can be lying.** `keda-token-minter` is scoped
+with `resourceNames`, and `can-i` without a resource name asks "may you do this
+to *any* serviceaccount?" — the honest answer to which is no:
+
+```bash
+oc auth can-i create serviceaccounts/token -n modernize-demo --as="$OP"
+# no   <- a FALSE NEGATIVE against a resourceNames-scoped Role
+```
+
+Name the resource and pass the subresource separately, as in the working form
+above. Measured on a cluster where the ScaledObject was `Ready=True` the whole
+time, so the permission was demonstrably present.
+
+And end to end — mint a token and call Thanos the way the scaler does. A `200`
+here means the RBAC is right and any remaining fault is in the ScaledObject:
+
+```bash
+TOK=$(oc create token keda-metrics-reader -n modernize-demo --duration=10m)
+oc exec -n modernize-demo deploy/kiosk -- python3 -c "
+import urllib.request, urllib.parse, ssl
+ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+url = 'https://thanos-querier.openshift-monitoring.svc.cluster.local:9092/api/v1/query?' + \
+      urllib.parse.urlencode({'query': 'sum(rate(inventory_rpc_total[1m]))',
+                              'namespace': 'modernize-demo'})
+r = urllib.request.Request(url); r.add_header('Authorization', 'Bearer $TOK')
+print(urllib.request.urlopen(r, timeout=15, context=ctx).read().decode()[:160])
+"
+```
+
+Verified output on a working cluster:
+
+```json
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1790278102,"1249.11"]}]}}
+```
+
 ## The trigger
 
 ```yaml
@@ -127,19 +264,19 @@ NAME                 REFERENCE              TARGETS            MINPODS   MAXPODS
 keda-hpa-inventory   Deployment/inventory   101467m/80 (avg)   3         10        10
 ```
 
-![replica count over time](../../docs/lab02/hpa-replicas-over-time.jpg)
+![replica count over time](../../docs/lab02/hpa-replicas-over-time.png)
 
 `kube_horizontalpodautoscaler_status_current_replicas` against the configured
 min and max. The staircase is the policy doing its job: a fast climb to the
 ceiling of 10, then the deliberate one-pod-per-60s descent once load stopped,
 then back up when it resumed.
 
-![the HPA KEDA created, scaled to 10](../../docs/lab02/hpa-scaled.jpg)
+![the HPA KEDA created, scaled to 10](../../docs/lab02/hpa-scaled.png)
 
 Managed by the `inventory` ScaledObject, driving an ordinary HPA: current 10,
 desired 10, metric `s0-prometheus` against target 80.
 
-![ten backend pods](../../docs/lab02/pods-scaled.jpg)
+![ten backend pods](../../docs/lab02/pods-scaled.png)
 
 Fourteen pods in the namespace: 2 Envoy, **10 inventory**, 1 MongoDB, 1 kiosk.
 

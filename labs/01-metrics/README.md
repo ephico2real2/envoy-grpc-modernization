@@ -101,17 +101,22 @@ curl -sk -H "Authorization: Bearer $TOKEN" \
 `oc whoami -t` returns nothing on CRC — the kubeconfig authenticates with client
 certificates, not a bearer token, so a ServiceAccount token has to be minted.
 
-![all five scrape targets up](../../docs/lab01/prometheus-targets.jpg)
+![all five scrape targets up](../../docs/lab01/prometheus-targets.png)
 
 Two Envoy targets and three inventory targets, all `Up`.
 
-![request rate per pod](../../docs/lab01/metrics-query.jpg)
+![request rate per pod](../../docs/lab01/metrics-query.png)
 
-`sum by (pod) (rate(inventory_rpc_total[2m]))` — three pods, evenly matched.
+`sum by (pod) (rate(inventory_rpc_total[2m]))`. Captured mid-scale-out, which
+makes the point better than a static shot would: the single high line is the
+original replica set carrying everything, and the lines joining it are the seven
+pods the autoscaler added. Once settled, all ten sit between **77.41 and 78.61
+requests/second** — a spread of 1.5 %, which is Envoy's round-robin over the
+headless Service.
 
 ### Broken down by gRPC method
 
-![request rate by method](../../docs/lab01/metrics-by-method.jpg)
+![request rate by method](../../docs/lab01/metrics-by-method.png)
 
 `sum by (method) (rate(inventory_rpc_total[2m]))`. The interceptor labels every
 call, so the read mix falls out without touching a handler: **ListItems 617.9/s,
@@ -121,16 +126,18 @@ starting.
 
 ### Latency, from the histogram
 
-![p50 and p99 latency by method](../../docs/lab01/metrics-latency.jpg)
+![p50 and p99 latency by method](../../docs/lab01/metrics-latency.png)
 
-`histogram_quantile(0.50, …)` over `inventory_rpc_duration_seconds_bucket`:
-**GetItem 0.54 ms, ListItems 1 ms** in the handler. Methods with no traffic in
+`histogram_quantile(0.99, …)` over `inventory_rpc_duration_seconds_bucket`:
+**GetItem 2 ms, ListWarehouses 4 ms, ListItems 5 ms** at p99 in the handler.
+The spike at the left is the scale-out — new pods are slowest on their first
+requests, then settle. Methods with no traffic in
 the window return `NaN` — correct, not a fault: there are no observations to
 take a quantile of.
 
 ### The proxy tier
 
-![Envoy upstream request rate and endpoint count](../../docs/lab01/metrics-envoy.jpg)
+![Envoy upstream request rate and endpoint count](../../docs/lab01/metrics-envoy.png)
 
 `envoy_cluster_upstream_rq_total` split by Envoy pod, alongside
 `envoy_cluster_membership_healthy{envoy_cluster_name="inventory"}` = **10** on
@@ -151,7 +158,7 @@ using CPU as the autoscaling signal.
 
 `manifests/60-alerts.yaml` adds three recording rules and four alerts.
 
-![the PrometheusRule in the console](../../docs/lab01/prometheusrule.jpg)
+![the PrometheusRule in the console](../../docs/lab01/prometheusrule.png)
 
 **Where to look for them.** On OpenShift, a `PrometheusRule` in a *user*
 namespace is evaluated by **Thanos Ruler**, not by `prometheus-user-workload`.
