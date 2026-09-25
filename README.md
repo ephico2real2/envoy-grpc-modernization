@@ -48,12 +48,21 @@ answer any call — every reply carries `servedBy`, naming the pod that produced
 
 ## What it proves
 
-![the kiosk listing stock](docs/kiosk-list.jpg)
+![the kiosk listing stock](docs/kiosk-list.png)
 
 The badges are the whole point: the page speaks REST/JSON, the service speaks gRPC only, and
-the right-hand panel shows exactly what crossed the wire. Under the table, `served by
-inventory-768746979-q5flc · 5 item(s) in MongoDB` names the backend pod that answered this
-particular request — refresh and it changes.
+the right-hand panel shows exactly what crossed the wire. The warehouse summary above the
+table is computed by a MongoDB aggregation, not by counting rows in the service —
+`6 warehouses · 14 SKUs · summed by MongoDB, served by inventory-6df77d74ff-n5wdz`. Clicking
+a warehouse row filters the stock table below it.
+
+Restocking an out-of-stock item is its own verb, because `CreateItem` correctly refuses a
+SKU that already exists:
+
+![restocking an out-of-stock item](docs/kiosk-restock.png)
+
+`POST /v1/items/SKU-1005:restock` with `{"quantity": 50}` — and SKU-1005 goes from `0 of 0`
+to `50 of 50`. It uses `$inc`, not `$set`, so two deliveries arriving at once both count.
 
 Reserving stock mutates real state, through Envoy, in MongoDB:
 

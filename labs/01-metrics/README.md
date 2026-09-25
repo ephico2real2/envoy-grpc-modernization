@@ -147,12 +147,27 @@ Envoy: it holds one endpoint per backend pod, and it tracked the autoscaler from
 
 ### Namespace resources
 
-![the namespace compute dashboard](../../docs/lab01/dashboard-namespace.jpg)
+Observe → Dashboards → *Kubernetes / Compute Resources / Namespace* shows the
+namespace's CPU and memory against requests and limits.
 
-Observe → Dashboards → *Kubernetes / Compute Resources / Namespace*. Worth
-reading next to lab 02: CPU is at **33% of limits** while the service handles
-about a thousand requests a second, which is the measurement that argues against
-using CPU as the autoscaling signal.
+No screenshot here, deliberately. On this CRC cluster those panels never finish
+rendering — they sit on a placeholder indefinitely. The **data is present**, so
+this is the console's dashboard renderer, not a gap in the metrics:
+
+```console
+$ curl ... --data-urlencode \
+    'query=sum(rate(container_cpu_usage_seconds_total{namespace="modernize-demo",container!=""}[5m]))'
+  cpu cores in use: 1.88
+$ curl ... --data-urlencode \
+    'query=sum(kube_pod_container_resource_requests{namespace="modernize-demo",resource="cpu"})'
+  cpu requested:    0.72
+```
+
+Read those two numbers together: the namespace is using **261 % of what it
+requested**. That is the measurement lab 02 builds its argument on — CPU
+utilisation is a ratio against a number chosen for scheduling, so it says
+whatever the requests make it say. Screenshotting a panel to make that point
+would have been weaker than the query.
 
 ## Alerting rules
 
