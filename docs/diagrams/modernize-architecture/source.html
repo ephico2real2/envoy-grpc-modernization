@@ -6,7 +6,7 @@
 :root {
   --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
   --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
-  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #6b7684; --none-wash: #eef0f3;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #5f6a77; --none-wash: #eef0f3;
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
@@ -222,10 +222,10 @@ a { color: var(--remote); }
 
             <line x1="574" y1="246" x2="536" y2="246" stroke="currentColor" stroke-width="1.2" marker-end="url(#a2)"/>
 
-            <rect x="277" y="212" width="255" height="68" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
-            <text x="291" y="234" font-weight="600" fill="var(--remote)">&#9316; the reply comes back</text>
-            <text x="291" y="252">protobuf &#8594; JSON, status &#8594; HTTP</text>
-            <text x="291" y="270" fill="var(--muted)">NOT_FOUND &#8594; 404, ALREADY_EXISTS &#8594; 409</text>
+            <rect x="247" y="212" width="285" height="68" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="261" y="234" font-weight="600" fill="var(--remote)">&#9316; the reply comes back</text>
+            <text x="261" y="252">protobuf &#8594; JSON, status &#8594; HTTP</text>
+            <text x="261" y="270" fill="var(--muted)">NOT_FOUND &#8594; 404, ALREADY_EXISTS &#8594; 409</text>
 
             <text x="20" y="310" fill="var(--muted)">The rewrite happens before route selection. Everything about the REST surface</text>
             <text x="20" y="328" fill="var(--muted)">comes from the proto&#39;s google.api.http options; the service code never reads them.</text>
