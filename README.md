@@ -122,19 +122,23 @@ why the route table matches the gRPC path.
 
 Same three pods, same `ROUND_ROBIN`; the only difference is what DNS returns.
 
-The diagram source is `docs/diagrams/modernize-architecture/source.html`.
-Re-render with:
+The diagram source is `docs/diagrams/modernize-architecture/source.html`. The PNGs beside it are rendered with
+[diagram-kit](https://github.com/ephico2real2/diagram-kit) (MPL-2.0), which writes them only when its checks pass:
 
 ```bash
-# needs Playwright's Chromium:
-#   python3 -m pip install playwright && python3 -m playwright install chromium
-python3 docs/diagrams/render.py \
+# once: the kit, pinned, and its Chromium
+python3 -m venv .venv
+.venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.0"
+.venv/bin/playwright install chromium
+
+.venv/bin/diagram-render \
   docs/diagrams/modernize-architecture/source.html \
   docs/diagrams/modernize-architecture layers,request,headless
 ```
 
-`render.py` renders every `.fig-scroll` in the page to a light and a dark PNG
-at 2x, reports page errors, and fails if the page scrolls sideways at 375 px.
+`diagram-render` renders every `.fig-scroll` in the page to a light and a dark PNG at 2x. It fails on a page error,
+a font that did not load, a label that runs past its box, text that cannot be read in one of the two themes, and a
+page that scrolls sideways at 375 px. The page and its pictures change together.
 
 ## Run it
 
